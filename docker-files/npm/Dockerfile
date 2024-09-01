@@ -16,7 +16,7 @@ RUN sed -i 's/\r$//' /tmp/setup.sh && chmod +x /tmp/setup.sh
 WORKDIR /app
 
 COPY docker-files/npm/cmd.sh /usr/local/bin/cmd.sh
-RUN chmod +x /usr/local/bin/cmd.sh
+RUN sed -i 's/\r$//' /usr/local/bin/cmd.sh && chmod +x /usr/local/bin/cmd.sh
 
 ENV REPO_NAME=${REPO_NAME}
 
