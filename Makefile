@@ -12,7 +12,7 @@ $(DOCKER_COMPOSE_PATH):
 	curl -L "https://github.com/docker/compose/releases/download/$(DOCKER_COMPOSE_VERSION)/docker-compose-$(shell uname -s)-$(shell uname -m)" -o $(DOCKER_COMPOSE_PATH)
 	chmod +x $(DOCKER_COMPOSE_PATH)
 
-build:
+build: $(DOCKER_COMPOSE_PATH)
 	REPO_NAME=$(REPO_NAME) $(DOCKER_COMPOSE_PATH) -f $(DOCKER_COMPOSE_FILE) build --no-cache
 
 run: build
