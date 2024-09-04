@@ -59,156 +59,127 @@ export function createHooks({
   settingsStore,
   planEditor,
 }: CreateHooksProps) {
-  const dataviewSource = derived(settingsStore, ($settings) => {
-    return $settings.dataviewSource;
-  });
+  const dataviewSource = derived(settingsStore, ($settings) => $settings.dataviewSource);
+
   const layoutReady = readable(false, (set) => {
     app.workspace.onLayoutReady(() => set(true));
   });
 
+  // Throttling the CSS change listener
   const isDarkMode = readable(getDarkModeFlag(), (set) => {
-    const eventRef = app.workspace.on("css-change", () => {
-      set(getDarkModeFlag());
-    });
+    const onCssChange = () => set(getDarkModeFlag());
+    const throttledCssChange = _.throttle(onCssChange, 100);
+    const eventRef = app.workspace.on("css-change", throttledCssChange);
 
     return () => {
       app.workspace.offref(eventRef);
     };
   });
 
-  // todo: these can be global stores
   const keyDown = useKeyDown();
   const isModPressed = useModPressed();
   const isOnline = useIsOnline();
-  // ---
 
   const dataviewChange = useDataviewChange(app.metadataCache);
   const dataviewLoaded = useDataviewLoaded(app);
 
   const icalRefreshTimer = readable(getUpdateTrigger(), (set) => {
-    const interval = setInterval(() => {
-      set(getUpdateTrigger());
-    }, icalRefreshIntervalMillis);
-
-    return () => {
-      clearInterval(interval);
-    };
+    const interval = setInterval(() => set(getUpdateTrigger()), icalRefreshIntervalMillis);
+    return () => clearInterval(interval);
   });
 
   const icalSyncTrigger = writable();
   const combinedIcalSyncTrigger = derived(
     [icalRefreshTimer, icalSyncTrigger],
-    getUpdateTrigger,
+    getUpdateTrigger
   );
 
-  const icalEvents = useIcalEvents(
-    settingsStore,
-    combinedIcalSyncTrigger,
-    isOnline,
-  );
+  const icalEvents = useIcalEvents(settingsStore, combinedIcalSyncTrigger, isOnline);
 
   const dateRanges = useDateRanges();
   const visibleDays = useVisibleDays(dateRanges.ranges);
 
-  // todo: improve naming
   const schedulerQueue = derived(
     [icalEvents, visibleDays],
     ([$icalEvents, $visibleDays]) => {
-      if (isEmpty($icalEvents) || isEmpty($visibleDays)) {
-        return [];
-      }
+      if (isEmpty($icalEvents) || isEmpty($visibleDays)) return [];
 
       const earliestDay = getEarliestMoment($visibleDays);
       const startOfEarliestDay = earliestDay.clone().startOf("day").toDate();
-      const relevantIcalEvents = $icalEvents.filter((icalEvent) =>
-        canHappenAfter(icalEvent, startOfEarliestDay),
-      );
 
-      // todo: make it easier to understand
-      return relevantIcalEvents.flatMap((icalEvent) => {
-        return $visibleDays.map(
-          (day) => () => icalEventToTasks(icalEvent, day),
+      return $icalEvents
+        .filter((icalEvent) => canHappenAfter(icalEvent, startOfEarliestDay))
+        .flatMap((icalEvent) =>
+          $visibleDays.map((day) => () => icalEventToTasks(icalEvent, day))
         );
-      });
-    },
+    }
   );
 
   const tasksFromEvents = readable<Array<ReturnType<typeof icalEventToTasks>>>(
     [],
     (set) => {
-      const scheduler =
-        createBackgroundBatchScheduler<ReturnType<typeof icalEventToTasks>>(
-          set,
-        );
-
+      const scheduler = createBackgroundBatchScheduler<ReturnType<typeof icalEventToTasks>>(set);
       return schedulerQueue.subscribe(scheduler.enqueueTasks);
-    },
+    }
   );
 
-  const visibleDayToEventOccurences = derived(
-    tasksFromEvents,
-    // todo: move out
-    flow(
-      filter(Boolean),
-      flatten,
-      groupBy((task: Task) => getDayKey(task.startTime)),
-      mapValues((tasks) => {
-        const [withTime, noTime]: [Task[], UnscheduledTask[]] = partition(
-          (task) => task.startMinutes !== undefined,
-          tasks,
-        );
+  const visibleDayToEventOccurrences = derived(tasksFromEvents, flow(
+    filter(Boolean),
+    flatten,
+    groupBy((task: Task) => getDayKey(task.startTime)),
+    mapValues((tasks) => {
+      const [withTime, noTime]: [Task[], UnscheduledTask[]] = partition(
+        (task) => task.startMinutes !== undefined,
+        tasks
+      );
+      return { withTime, noTime };
+    })
+  ));
 
-        return { withTime, noTime };
-      }),
-    ),
-  );
-
-  const taskUpdateTrigger = derived(
-    [dataviewChange, dataviewSource],
-    getUpdateTrigger,
-  );
+  const taskUpdateTrigger = derived([dataviewChange, dataviewSource], getUpdateTrigger);
   const debouncedTaskUpdateTrigger = useDebounceWithDelay(
     taskUpdateTrigger,
     keyDown,
-    reQueryAfterMillis,
+    reQueryAfterMillis
   );
+
   const visibleDailyNotes = useVisibleDailyNotes(
     layoutReady,
     debouncedTaskUpdateTrigger,
-    visibleDays,
+    visibleDays
   );
+
   const listsFromVisibleDailyNotes = useListsFromVisibleDailyNotes(
     visibleDailyNotes,
     debouncedTaskUpdateTrigger,
-    dataviewFacade,
+    dataviewFacade
   );
+
   const tasksFromExtraSources = useTasksFromExtraSources({
     dataviewSource,
     debouncedTaskUpdateTrigger,
     visibleDailyNotes,
     dataviewFacade,
   });
+
   const dataviewTasks = useDataviewTasks({
     listsFromVisibleDailyNotes,
     tasksFromExtraSources,
     settingsStore,
   });
-  const visibleDataviewTasks = useVisibleDataviewTasks(
-    dataviewTasks,
-    visibleDays,
-  );
+
+  const visibleDataviewTasks = useVisibleDataviewTasks(dataviewTasks, visibleDays);
 
   const visibleTasks = derived(
-    [visibleDataviewTasks, visibleDayToEventOccurences],
-    ([$visibleDataviewTasks, $visibleDayToEventOccurences]) =>
-      mergeTasks($visibleDataviewTasks, $visibleDayToEventOccurences),
+    [visibleDataviewTasks, visibleDayToEventOccurrences],
+    ([$visibleDataviewTasks, $visibleDayToEventOccurrences]) =>
+      mergeTasks($visibleDataviewTasks, $visibleDayToEventOccurrences)
   );
 
   const tasksForToday = derived(
     [visibleTasks, currentTime],
-    ([$visibleTasks, $currentTime]) => {
-      return $visibleTasks[getDayKey($currentTime)] || getEmptyRecordsForDay();
-    },
+    ([$visibleTasks, $currentTime]) =>
+      $visibleTasks[getDayKey($currentTime)] || getEmptyRecordsForDay()
   );
 
   const editContext = useEditContext({

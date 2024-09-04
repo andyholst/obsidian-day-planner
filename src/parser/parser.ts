@@ -12,38 +12,44 @@ export function getListItemsUnderHeading(
   metadata: CachedMetadata,
   heading: string,
 ) {
-  const { headings } = metadata;
+  const { headings, listItems } = metadata;
 
-  if (!headings) {
+  if (!headings || !listItems) {
     return [];
   }
 
-  const planHeadingIndex = headings.findIndex((h) => h.heading === heading);
+  let planHeading, nextHeadingOfSameLevel;
+  for (let i = 0; i < headings.length; i++) {
+    if (!planHeading && headings[i].heading === heading) {
+      planHeading = headings[i];
+    } else if (planHeading && headings[i].level <= planHeading.level) {
+      nextHeadingOfSameLevel = headings[i];
+      break;
+    }
+  }
 
-  if (planHeadingIndex < 0) {
+  if (!planHeading) {
     return [];
   }
 
-  const planHeading = headings[planHeadingIndex];
-  const nextHeadingOfSameLevel = headings
-    .slice(planHeadingIndex + 1)
-    .find((heading) => heading.level <= planHeading.level);
+  const { start: planStart } = planHeading.position;
+  const nextStart = nextHeadingOfSameLevel?.position.start.line ?? Infinity;
 
-  return metadata.listItems?.filter((li) => {
-    const isBelowPlan =
-      li.position.start.line > planHeading.position.start.line;
-    const isAboveNextHeadingIfItExists =
-      !nextHeadingOfSameLevel ||
-      li.position.start.line < nextHeadingOfSameLevel.position.start.line;
-
-    return isBelowPlan && isAboveNextHeadingIfItExists;
-  });
+  return listItems.filter(({ position: { start: { line } } }) =>
+    line > planStart.line && line < nextStart
+  );
 }
 
 export function getHeadingByText(metadata: CachedMetadata, text: string) {
   const { headings = [] } = metadata;
 
-  return headings?.find((h) => h.heading === text);
+  for (let i = 0; i < headings.length; i++) {
+    if (headings[i].heading === text) {
+      return headings[i];
+    }
+  }
+
+  return null;
 }
 
 export function createTask({
@@ -59,20 +65,19 @@ export function createTask({
 }) {
   const match = timestampRegExp.exec(line.trim());
 
-  if (!match) {
+  if (!match || !match.groups) {
     return null;
   }
 
-  const {
-    groups: { listTokens, start, end, text },
-  } = match;
+  const { listTokens, start, end, text } = match.groups;
 
   const startTime = parseTimestamp(start, day);
+  const endTime = end ? parseTimestamp(end, day) : null;
 
   return {
     listTokens,
     startTime,
-    endTime: parseTimestamp(end, day),
+    endTime,
     text: getDisplayedText(match, completeContent),
     firstLineText: text.trim(),
     location,
@@ -84,25 +89,18 @@ function getDisplayedText(
   { groups: { text, listTokens, completion } }: RegExpExecArray,
   completeContent: string,
 ) {
-  const isTask = completion?.length > 0;
-
+  const isTask = !!completion?.length;
   const indexOfFirstNewline = completeContent.indexOf("\n");
-  const indexAfterFirstNewline = indexOfFirstNewline + 1;
-  const linesAfterFirst = completeContent.substring(indexAfterFirstNewline);
 
   if (indexOfFirstNewline < 0) {
-    if (isTask) {
-      return `${listTokens}${text}`;
-    }
-
-    return text;
+    return isTask ? `${listTokens}${text}` : text;
   }
+
+  const linesAfterFirst = completeContent.slice(indexOfFirstNewline + 1);
 
   if (isTask) {
     return `${listTokens}${text}\n${linesAfterFirst}`;
   }
 
-  const formattedLinesAfterFirst = dedent(linesAfterFirst).trimStart();
-
-  return `${text}\n${formattedLinesAfterFirst}`;
+  return `${text}\n${dedent(linesAfterFirst).trimStart()}`;
 }

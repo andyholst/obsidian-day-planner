@@ -1,3 +1,29 @@
+## 0.21.1.2: Removed the micro lags on laptop & lags on smartphone
+
+### Enhancements
+
+- **Performance Optimization:**
+  - Refactored core functions to significantly boost performance:
+    - **Efficient String Handling:** Reduced overhead by optimizing string concatenation and manipulation processes.
+    - **In-place Data Modifications:** Implemented in-place updates to minimize memory usage and avoid unnecessary data duplication.
+    - **Optimized Time Calculations:** Decreased reliance on Moment object cloning, reducing both memory and CPU usage.
+
+- **Memory Usage Reduction:**
+  - Streamlined various operations to reduce memory consumption:
+    - **Eliminated Redundant Operations:** Removed unnecessary intermediate arrays and objects, leading to lower memory footprint.
+    - **Efficient Task Grouping and Flattening:** Improved the logic for handling task-related data, making it more memory efficient.
+
+- **Improved Task Processing Logic:**
+  - Enhanced the way tasks and events are processed:
+    - **Refined Multi-day Task Handling:** Made the processing of multi-day tasks more efficient, ensuring faster execution with less memory usage.
+    - **Optimized Event Synchronization:** Fine-tuned the synchronization process for better performance.
+
+- **Better Asynchronous Processing:**
+  - Optimized background task processing, resulting in reduced latency and smoother user experience.
+
+- **Reduced the micro lags on laptop and lags on smartphone:**
+  - By increasing the re-query from 500ms to one minute to look for task changes
+
 ## 0.21.1.1
 
 ### New features

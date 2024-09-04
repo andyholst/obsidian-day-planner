@@ -10,7 +10,6 @@ import { EditMode, EditOperation } from "./types";
 
 export interface UseEditHandlersProps {
   startEdit: (operation: EditOperation) => void;
-  // todo: make dynamic, since it can change?
   day: Moment;
   obsidianFacade: ObsidianFacade;
   cursorMinutes: Readable<number>;
@@ -24,8 +23,10 @@ export function createEditHandlers({
   cursorMinutes,
   editOperation,
 }: UseEditHandlersProps) {
+
   function handleContainerMouseDown() {
-    const newTask = createTask(day, get(cursorMinutes));
+    const cursorTime = get(cursorMinutes);
+    const newTask = createTask(day, cursorTime);
 
     startEdit({
       task: { ...newTask, isGhost: true },
@@ -39,40 +40,29 @@ export function createEditHandlers({
   }
 
   async function handleTaskMouseUp(task: UnscheduledTask) {
-    if (get(editOperation)) {
-      return;
-    }
+    if (get(editOperation)) return;
 
     const { path, line } = task.location;
     await obsidianFacade.revealLineInFile(path, line);
   }
 
-  // todo: remove
   function handleGripMouseDown(task: PlacedTask, mode: EditMode) {
     startEdit({ task, mode, day });
   }
 
   function handleUnscheduledTaskGripMouseDown(task: UnscheduledTask) {
-    const withAddedTime = {
-      ...task,
-      startMinutes: get(cursorMinutes),
-      // todo: add a proper fix
-      startTime: task.location
-        ? getDateFromPath(task.location.path, "day") || window.moment()
-        : window.moment(),
-    };
+    const cursorTime = get(cursorMinutes);
+    const startTime = task.location
+      ? getDateFromPath(task.location.path, "day") || window.moment()
+      : window.moment();
+
+    const withAddedTime = { ...task, startMinutes: cursorTime, startTime };
 
     startEdit({ task: withAddedTime, mode: EditMode.DRAG, day });
   }
 
   function handleMouseEnter() {
-    editOperation.update(
-      (previous) =>
-        previous && {
-          ...previous,
-          day,
-        },
-    );
+    editOperation.update((previous) => previous && { ...previous, day });
   }
 
   return {
