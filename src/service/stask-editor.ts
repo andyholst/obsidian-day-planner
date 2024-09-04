@@ -3,8 +3,6 @@ import { STask } from "obsidian-dataview";
 import { isNotVoid } from "typed-assert";
 
 import {
-  assertActiveClock,
-  assertNoActiveClock,
   withActiveClock,
   withActiveClockCompleted,
   withoutActiveClock,
@@ -17,29 +15,24 @@ import { DataviewFacade } from "./dataview-facade";
 import { ObsidianFacade } from "./obsidian-facade";
 
 export class STaskEditor {
-  clockOut = withNotice(async (sTask: STask) => {
-    await this.obsidianFacade.editFile(sTask.path, (contents) =>
-      replaceSTaskInFile(
-        contents,
-        sTask,
-        toMarkdown(withActiveClockCompleted(sTask)),
-      ),
-    );
-  });
-  cancelClock = withNotice(async (sTask: STask) => {
-    await this.obsidianFacade.editFile(sTask.path, (contents) =>
-      replaceSTaskInFile(
-        contents,
-        sTask,
-        toMarkdown(withoutActiveClock(sTask)),
-      ),
-    );
-  });
-
   constructor(
     private readonly obsidianFacade: ObsidianFacade,
     private readonly dataviewFacade: DataviewFacade,
   ) {}
+
+  clockOut = withNotice(async (sTask: STask) => {
+    const updatedMarkdown = toMarkdown(withActiveClockCompleted(sTask));
+    await this.obsidianFacade.editFile(sTask.path, (contents) =>
+      replaceSTaskInFile(contents, sTask, updatedMarkdown),
+    );
+  });
+
+  cancelClock = withNotice(async (sTask: STask) => {
+    const updatedMarkdown = toMarkdown(withoutActiveClock(sTask));
+    await this.obsidianFacade.editFile(sTask.path, (contents) =>
+      replaceSTaskInFile(contents, sTask, updatedMarkdown),
+    );
+  });
 
   private replaceSTaskUnderCursor = (newMarkdown: string) => {
     const view = this.obsidianFacade.getActiveMarkdownView();
@@ -52,43 +45,29 @@ export class STaskEditor {
     );
   };
 
-  private getSTaskUnderCursorFromLastView = () => {
-    const sTask = this.dataviewFacade.getTaskFromCaretLocation(
-      this.obsidianFacade.getLastCaretLocation(),
-    );
+  private getSTaskUnderCursorFromLastView = (): STask => {
+    const location = this.obsidianFacade.getLastCaretLocation();
+    const sTask = this.dataviewFacade.getTaskFromCaretLocation(location);
 
     isNotVoid(sTask, "No task under cursor");
-
     return sTask;
   };
 
-  clockInUnderCursor = withNotice(
-    flow(
-      this.getSTaskUnderCursorFromLastView,
-      assertNoActiveClock,
-      withActiveClock,
-      toMarkdown,
-      this.replaceSTaskUnderCursor,
-    ),
-  );
+  clockInUnderCursor = withNotice(() => {
+    const sTask = this.getSTaskUnderCursorFromLastView();
+    const updatedMarkdown = toMarkdown(withActiveClock(sTask));
+    this.replaceSTaskUnderCursor(updatedMarkdown);
+  });
 
-  clockOutUnderCursor = withNotice(
-    flow(
-      this.getSTaskUnderCursorFromLastView,
-      assertActiveClock,
-      withActiveClockCompleted,
-      toMarkdown,
-      this.replaceSTaskUnderCursor,
-    ),
-  );
+  clockOutUnderCursor = withNotice(() => {
+    const sTask = this.getSTaskUnderCursorFromLastView();
+    const updatedMarkdown = toMarkdown(withActiveClockCompleted(sTask));
+    this.replaceSTaskUnderCursor(updatedMarkdown);
+  });
 
-  cancelClockUnderCursor = withNotice(
-    flow(
-      this.getSTaskUnderCursorFromLastView,
-      assertActiveClock,
-      withoutActiveClock,
-      toMarkdown,
-      this.replaceSTaskUnderCursor,
-    ),
-  );
+  cancelClockUnderCursor = withNotice(() => {
+    const sTask = this.getSTaskUnderCursorFromLastView();
+    const updatedMarkdown = toMarkdown(withoutActiveClock(sTask));
+    this.replaceSTaskUnderCursor(updatedMarkdown);
+  });
 }

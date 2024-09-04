@@ -14,7 +14,7 @@ export const statusBarTextLimit = 15;
 export const indentBeforeTaskParagraph = 6;
 export const clockKey = "clocked";
 export const clockFormat = "YYYY-MM-DDTHH:mm:ss";
-export const reQueryAfterMillis = 200;
+export const reQueryAfterMillis = 60000;
 export const icalRefreshIntervalMillis = 5 * 60 * 1000;
 
 export const noTitle = "(No title)";

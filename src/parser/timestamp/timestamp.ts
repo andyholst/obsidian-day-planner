@@ -1,5 +1,4 @@
 import type { Moment } from "moment/moment";
-
 import { timeRegExp } from "../../regexp";
 
 export function parseTimestamp(asText?: string, day?: Moment): Moment | null {
@@ -9,28 +8,26 @@ export function parseTimestamp(asText?: string, day?: Moment): Moment | null {
 
   const result = timeRegExp.exec(asText);
 
-  if (result === null) {
+  if (!result) {
     throw new Error(`${asText} is not a valid timestamp`);
   }
 
-  const [, hours, minutes, ampm] = result;
-
-  let parsedHours = parseInt(hours);
+  let parsedHours = parseInt(result[1]);
 
   if (isNaN(parsedHours)) {
     throw new Error(`${asText} is not a valid timestamp`);
   }
 
-  const parsedMinutes = parseInt(minutes) || 0;
+  const parsedMinutes = parseInt(result[2]) || 0;
+  const ampm = result[3]?.toLowerCase();
 
-  if (ampm?.toLowerCase() === "pm" && parsedHours < 12) {
+  if (ampm === "pm" && parsedHours < 12) {
     parsedHours += 12;
+  } else if (ampm === "am" && parsedHours === 12) {
+    parsedHours = 0; // Correct 12 AM to 0 hours (midnight)
   }
 
-  const timeOfDay = window.moment.duration({
-    hours: parsedHours,
-    minutes: parsedMinutes,
-  });
+  const timeOfDay = { hours: parsedHours, minutes: parsedMinutes };
 
-  return day.clone().startOf("day").add(timeOfDay);
+  return day?.clone().startOf("day").add(timeOfDay) || null;
 }
