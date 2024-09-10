@@ -1,3 +1,8 @@
+## 0.22.0.1
+
+Resolved conficts between 0.21.1.2 and 0.22.0 and refactored some specific files to increase performance and reduce
+memory footprint.
+
 ## 0.22.0
 
 ### ✨ New features
