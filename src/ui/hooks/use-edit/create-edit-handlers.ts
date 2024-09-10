@@ -1,11 +1,10 @@
 import { Moment } from "moment/moment";
 import { getDateFromPath } from "obsidian-daily-notes-interface";
 import { get, Readable, Writable } from "svelte/store";
-
 import { ObsidianFacade } from "../../../service/obsidian-facade";
-import { PlacedTask, UnscheduledTask } from "../../../types";
+import { DayPlannerSettings } from "../../../settings";
+import { Task, UnscheduledTask } from "../../../types";
 import { createTask } from "../../../util/task-utils";
-
 import { EditMode, EditOperation } from "./types";
 
 export interface UseEditHandlersProps {
@@ -14,6 +13,7 @@ export interface UseEditHandlersProps {
   obsidianFacade: ObsidianFacade;
   cursorMinutes: Readable<number>;
   editOperation: Writable<EditOperation>;
+  settings: Readable<DayPlannerSettings>;
 }
 
 export function createEditHandlers({
@@ -22,11 +22,13 @@ export function createEditHandlers({
   startEdit,
   cursorMinutes,
   editOperation,
+  settings,
 }: UseEditHandlersProps) {
 
   function handleContainerMouseDown() {
-    const cursorTime = get(cursorMinutes);
-    const newTask = createTask(day, cursorTime);
+    const cursor = get(cursorMinutes);
+    const taskStatus = get(settings).taskStatusOnCreation;
+    const newTask = createTask(day, cursor, taskStatus);
 
     startEdit({
       task: { ...newTask, isGhost: true },
@@ -35,34 +37,38 @@ export function createEditHandlers({
     });
   }
 
-  function handleResizerMouseDown(task: PlacedTask, mode: EditMode) {
+  function handleResizerMouseDown(task: Task, mode: EditMode) {
     startEdit({ task, mode, day });
   }
 
   async function handleTaskMouseUp(task: UnscheduledTask) {
     if (get(editOperation)) return;
 
-    const { path, line } = task.location;
-    await obsidianFacade.revealLineInFile(path, line);
+    const { path, position } = task.location;
+    await obsidianFacade.revealLineInFile(path, position?.start?.line);
   }
 
-  function handleGripMouseDown(task: PlacedTask, mode: EditMode) {
+  function handleGripMouseDown(task: Task, mode: EditMode) {
     startEdit({ task, mode, day });
   }
 
   function handleUnscheduledTaskGripMouseDown(task: UnscheduledTask) {
-    const cursorTime = get(cursorMinutes);
-    const startTime = task.location
+    const cursor = get(cursorMinutes);
+    const startTime = task.location 
       ? getDateFromPath(task.location.path, "day") || window.moment()
       : window.moment();
 
-    const withAddedTime = { ...task, startMinutes: cursorTime, startTime };
+    const updatedTask = {
+      ...task,
+      startMinutes: cursor,
+      startTime,
+    };
 
-    startEdit({ task: withAddedTime, mode: EditMode.DRAG, day });
+    startEdit({ task: updatedTask, mode: EditMode.DRAG, day });
   }
 
   function handleMouseEnter() {
-    editOperation.update((previous) => previous && { ...previous, day });
+    editOperation.update((prev) => prev ? { ...prev, day } : prev);
   }
 
   return {

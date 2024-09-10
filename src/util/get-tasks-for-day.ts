@@ -18,15 +18,18 @@ type DurationOptions = Pick<
 >;
 
 function calculateDuration(tasks: Task[], options: DurationOptions) {
-  return tasks.map((current, i) => {
+  return tasks.map((current, i, array) => {
     if (current.durationMinutes) return current;
 
-    const next = tasks[i + 1];
-    const durationMinutes = next && options.extendDurationUntilNext
-      ? next.startMinutes - current.startMinutes
-      : options.defaultDurationMinutes;
+    const next = array[i + 1];
+    const shouldExtendUntilNext = next && options.extendDurationUntilNext;
 
-    return { ...current, durationMinutes };
+    return {
+      ...current,
+      durationMinutes: shouldExtendUntilNext
+        ? next.startMinutes - current.startMinutes
+        : options.defaultDurationMinutes,
+    };
   });
 }
 
@@ -37,26 +40,28 @@ export function mapToTasksForDay(
 ) {
   const [withTime, withoutTime] = partition(isTimeSetOnTask, tasksForDay);
 
-  const tasksWithTime = [];
-  const errors = [];
-
-  for (const sTask of withTime) {
-    try {
-      tasksWithTime.push(toTask(sTask, day));
-    } catch (error) {
-      errors.push(error);
-    }
-  }
+  const { parsed: tasksWithTime, errors } = withTime.reduce(
+    (result, sTask) => {
+      try {
+        const task = toTask(sTask, day);
+        result.parsed.push(task);
+      } catch (error) {
+        result.errors.push(error);
+      }
+      return result;
+    },
+    { parsed: [], errors: [] }
+  );
 
   tasksWithTime.sort((a, b) => a.startMinutes - b.startMinutes);
 
   const noTime = withoutTime
     .filter((sTask) => {
-      if (!sTask.task) return false;
-      return settings.showUnscheduledNestedTasks || !sTask.parent;
+      return sTask.task && (settings.showUnscheduledNestedTasks || !sTask.parent);
     })
     .map((sTask) => toUnscheduledTask(sTask, day));
 
+  // Calculate durations for tasks with time.
   const withTimeAndDuration = calculateDuration(tasksWithTime, settings);
 
   return { withTime: withTimeAndDuration, noTime, errors };

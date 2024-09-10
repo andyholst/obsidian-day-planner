@@ -5,13 +5,16 @@ import { get } from "svelte/store";
 import { defaultDurationMinutes } from "../constants";
 import { settings } from "../global-store/settings";
 import {
+  checkboxRegExp,
   keylessScheduledPropRegExp,
+  listTokenRegExp,
   scheduledPropRegExp,
   shortScheduledPropRegExp,
+  timestampRegExp,
 } from "../regexp";
-import type { Task } from "../types";
-import { PlacedTask } from "../types";
+import { Task } from "../types";
 
+import { getListTokens } from "./dataview";
 import { getId } from "./id";
 import { addMinutes, minutesToMoment, minutesToMomentOfDay } from "./moment";
 
@@ -37,13 +40,13 @@ export function getEndTime(task: {
   return task.startTime.clone().add(task.durationMinutes, "minutes");
 }
 
-export function getRenderKey(task: PlacedTask) {
+export function getRenderKey(task: Task) {
   return `${task.startMinutes} ${getEndMinutes(task)} ${task.text} ${
     task.isGhost ?? ""
   }`;
 }
 
-export function getNotificationKey(task: PlacedTask) {
+export function getNotificationKey(task: Task) {
   return `${task.location?.path ?? "blank"}::${task.startMinutes}::${
     task.durationMinutes
   }::${task.text}`;
@@ -54,8 +57,7 @@ export function copy(task: Task): Task {
     ...task,
     id: getId(),
     isGhost: true,
-    // TODO: there should be a better way to track which tasks are new
-    location: { ...task.location, line: undefined },
+    location: { ...task.location },
   };
 }
 
@@ -74,12 +76,19 @@ export function areValuesEmpty(record: Record<string, [] | object>) {
   return Object.values(record).every(isEmpty);
 }
 
+// todo: confusing. Do not mix up parsed and updated props
+// todo: add replaceTimestamp()
 function taskLineToString(task: Task) {
-  return `${task.listTokens}${createTimestamp(
+  const firstLineText = removeTimestamp(
+    removeListTokens(getFirstLine(task.text)),
+  );
+
+  return `${getListTokens(task)} ${createTimestamp(
     task.startMinutes,
     task.durationMinutes,
     get(settings).timestampFormat,
-  )} ${task.firstLineText}`;
+  )} ${firstLineText}
+${getLinesAfterFirst(task.text)}`;
 }
 
 export function updateScheduledPropInText(text: string, dayKey: string) {
@@ -96,13 +105,14 @@ export function updateScheduledPropInText(text: string, dayKey: string) {
 }
 
 export function updateTaskText(task: Task) {
-  return { ...task, firstLineText: taskLineToString(task) };
+  return { ...task, text: taskLineToString(task) };
 }
 
 export function updateTaskScheduledDay(task: Task, dayKey: string) {
   return {
     ...task,
-    firstLineText: updateScheduledPropInText(task.firstLineText, dayKey),
+    text: `${updateScheduledPropInText(getFirstLine(task.text), dayKey)}
+${getLinesAfterFirst(task.text)}`,
   };
 }
 
@@ -116,18 +126,48 @@ export function offsetYToMinutes(
   return (offsetY + hiddenHoursSize) / zoomLevel;
 }
 
-export function createTask(day: Moment, startMinutes: number): PlacedTask {
+export function createTask(
+  day: Moment,
+  startMinutes: number,
+  status: string,
+): Task {
   return {
     id: getId(),
     startMinutes,
     durationMinutes: defaultDurationMinutes,
-    firstLineText: "New item",
     text: "New item",
     startTime: minutesToMomentOfDay(startMinutes, day),
-    listTokens: "- [ ] ",
+    symbol: "-",
+    status,
     placing: {
       widthPercent: 100,
       xOffsetPercent: 0,
     },
   };
+}
+
+export function getFirstLine(text: string) {
+  return text.split("\n")[0];
+}
+
+export function getLinesAfterFirst(text: string) {
+  return text.split("\n").slice(1).join("\n");
+}
+
+export function removeTimestamp(text: string) {
+  const match = timestampRegExp.exec(text.trim());
+
+  if (!match) {
+    return text;
+  }
+
+  const {
+    groups: { text: textWithoutTimestamp },
+  } = match;
+
+  return textWithoutTimestamp;
+}
+
+export function removeListTokens(text: string) {
+  return text.replace(listTokenRegExp, "").replace(checkboxRegExp, "");
 }

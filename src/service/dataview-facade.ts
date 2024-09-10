@@ -1,50 +1,24 @@
 import { App } from "obsidian";
 import { getAPI, STask } from "obsidian-dataview";
-import { writable } from "svelte/store";
 
 export class DataviewFacade {
-  // TODO: There is a separate store for this, consider removing this store in future refactoring.
-  readonly dataviewLoaded = writable(false);
+  private readonly api = getAPI(this.app);
 
   constructor(private readonly app: App) {}
 
-  getAllTasksFrom(source: string): STask[] {
-    const dataview = this.getDataview();
-    if (!dataview) return [];
+  getAllTasksFrom = (source: string) => {
+    return this.api?.pages(source)?.file?.tasks?.array() ?? [];
+  };
 
-    const pages = dataview.pages(source);
-    return pages?.file?.tasks?.array() || [];
-  }
+  getAllListsFrom = (source: string) => {
+    return this.api?.pages(source)?.file?.lists?.array() ?? [];
+  };
 
-  getAllListsFrom(source: string) {
-    const dataview = this.getDataview();
-    if (!dataview) return [];
+  getTaskFromCaretLocation = ({ path, line }: { path: string; line: number }) => {
+    return this.getTasksFromPath(path)?.find((sTask: STask) => sTask.line === line) ?? null;
+  };
 
-    const pages = dataview.pages(source);
-    return pages?.file?.lists?.array() || [];
-  }
-
-  getTaskFromCaretLocation({ path, line }: { path: string; line: number }) {
-    const tasks = this.getTasksFromPath(path);
-    return tasks?.find((sTask: STask) => sTask.line === line);
-  }
-
-  private getTasksFromPath(path: string): STask[] | undefined {
-    const dataview = getAPI(this.app);
-    return dataview?.page(path)?.file?.tasks;
-  }
-
-  private getDataview() {
-    const dataview = getAPI(this.app);
-    const isLoaded = !!dataview;
-
-    this.dataviewLoaded.update((loaded) => {
-      if (loaded !== isLoaded) {
-        return isLoaded;
-      }
-      return loaded;
-    });
-
-    return dataview;
-  }
+  private getTasksFromPath = (path: string): STask[] | undefined => {
+    return this.api?.page(path)?.file?.tasks;
+  };
 }

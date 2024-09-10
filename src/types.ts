@@ -12,26 +12,23 @@ import { getDiff, updateText } from "./util/tasks-utils";
 
 export interface TaskLocation {
   path: string;
-  line: number;
   position: Pos;
 }
 
 export type OnUpdateFn = (
   taskUpdate: ReturnType<typeof updateText> & {
-    moved: { dayKey: string; task: PlacedTask }[];
+    moved: { dayKey: string; task: Task }[];
   },
 ) => Promise<void | void[]>;
 
 export type Diff = ReturnType<typeof getDiff>;
 
-export interface UnscheduledTask {
-  /**
-   * @deprecated this will be replaced with dataview `symbol` and `status`
-   */
-  listTokens: string;
+export interface TaskTokens {
+  symbol: string;
+  status?: string;
+}
 
-  // TODO: the distinction needs to be clearer
-  firstLineText: string;
+export interface UnscheduledTask extends TaskTokens {
   text: string;
 
   id: string;
@@ -43,21 +40,19 @@ export interface UnscheduledTask {
 }
 
 export interface Task extends UnscheduledTask {
-  // todo: should be parsedStartTime to highlight that this doesn't change
   startTime: Moment;
+  /**
+   * @deprecated Should be derived from startTime
+   */
   startMinutes: number;
 }
 
 export interface TasksForDay {
-  withTime: PlacedTask[];
+  withTime: Task[];
   noTime: UnscheduledTask[];
 }
 
-// todo: rename to DayToTasks
-export type Tasks = Record<string, TasksForDay>;
-
-// TODO: delete this type
-export interface PlacedTask extends Task {}
+export type DayToTasks = Record<string, TasksForDay>;
 
 export type RelationToNow = "past" | "present" | "future";
 
@@ -79,7 +74,7 @@ export interface ObsidianContext {
   dataviewLoaded: Readable<boolean>;
   renderMarkdown: RenderMarkdown;
   editContext: ReturnType<typeof useEditContext>;
-  visibleTasks: Readable<Tasks>;
+  visibleTasks: Readable<DayToTasks>;
   showReleaseNotes: () => void;
   showPreview: ReturnType<typeof createShowPreview>;
   isModPressed: Readable<boolean>;
