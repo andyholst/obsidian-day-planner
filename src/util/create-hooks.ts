@@ -1,11 +1,11 @@
+import { throttle } from "lodash";
 import {
-  filter,
-  flatten,
-  flow,
-  groupBy,
-  isEmpty,
-  mapValues,
-  partition,
+  filter as fpFilter,
+  flatten as fpFlatten,
+  flow as fpFlow,
+  groupBy as fpGroupBy,
+  mapValues as fpMapValues,
+  partition as fpPartition,
 } from "lodash/fp";
 import { App } from "obsidian";
 import { derived, readable, writable, Writable } from "svelte/store";
@@ -49,7 +49,7 @@ interface CreateHooksProps {
 }
 
 function getDarkModeFlag() {
-  return document.body.hasClass("theme-dark");
+  return document.body.classList.contains("theme-dark");
 }
 
 export function createHooks({
@@ -59,16 +59,19 @@ export function createHooks({
   settingsStore,
   planEditor,
 }: CreateHooksProps) {
-  const dataviewSource = derived(settingsStore, ($settings) => $settings.dataviewSource);
+  const dataviewSource = derived(
+    settingsStore,
+    ($settings) => $settings.dataviewSource
+  );
 
   const layoutReady = readable(false, (set) => {
     app.workspace.onLayoutReady(() => set(true));
   });
 
-  // Throttling the CSS change listener
+  // Throttling the CSS change listener to 200ms for better performance
   const isDarkMode = readable(getDarkModeFlag(), (set) => {
     const onCssChange = () => set(getDarkModeFlag());
-    const throttledCssChange = _.throttle(onCssChange, 100);
+    const throttledCssChange = throttle(onCssChange, 200);
     const eventRef = app.workspace.on("css-change", throttledCssChange);
 
     return () => {
@@ -94,7 +97,11 @@ export function createHooks({
     getUpdateTrigger
   );
 
-  const icalEvents = useIcalEvents(settingsStore, combinedIcalSyncTrigger, isOnline);
+  const icalEvents = useIcalEvents(
+    settingsStore,
+    combinedIcalSyncTrigger,
+    isOnline
+  );
 
   const dateRanges = useDateRanges();
   const visibleDays = useVisibleDays(dateRanges.ranges);
@@ -102,7 +109,7 @@ export function createHooks({
   const schedulerQueue = derived(
     [icalEvents, visibleDays],
     ([$icalEvents, $visibleDays]) => {
-      if (isEmpty($icalEvents) || isEmpty($visibleDays)) return [];
+      if (!($icalEvents?.length) || !($visibleDays?.length)) return [];
 
       const earliestDay = getEarliestMoment($visibleDays);
       const startOfEarliestDay = earliestDay.clone().startOf("day").toDate();
@@ -123,12 +130,12 @@ export function createHooks({
     }
   );
 
-  const visibleDayToEventOccurrences = derived(tasksFromEvents, flow(
-    filter(Boolean),
-    flatten,
-    groupBy((task: Task) => getDayKey(task.startTime)),
-    mapValues((tasks) => {
-      const [withTime, noTime]: [Task[], UnscheduledTask[]] = partition(
+  const visibleDayToEventOccurrences = derived(tasksFromEvents, fpFlow(
+    fpFilter(Boolean),
+    fpFlatten,
+    fpGroupBy((task: Task) => getDayKey(task.startTime)),
+    fpMapValues((tasks) => {
+      const [withTime, noTime]: [Task[], UnscheduledTask[]] = fpPartition(
         (task) => task.startMinutes !== undefined,
         tasks
       );
@@ -137,6 +144,7 @@ export function createHooks({
   ));
 
   const taskUpdateTrigger = derived([dataviewChange, dataviewSource], getUpdateTrigger);
+  
   const debouncedTaskUpdateTrigger = useDebounceWithDelay(
     taskUpdateTrigger,
     keyDown,
@@ -168,7 +176,10 @@ export function createHooks({
     settingsStore,
   });
 
-  const visibleDataviewTasks = useVisibleDataviewTasks(dataviewTasks, visibleDays);
+  const visibleDataviewTasks = useVisibleDataviewTasks(
+    dataviewTasks,
+    visibleDays
+  );
 
   const visibleTasks = derived(
     [visibleDataviewTasks, visibleDayToEventOccurrences],

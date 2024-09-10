@@ -34,8 +34,7 @@ export function textToString(node: Node) {
   return `${node.symbol} ${statusText}${deleteProps(node.text)}\n`;
 }
 
-// Convert a Node structure to a string with indentation for nested nodes.
-export function toString(node: Node, indentation = "") {
+export function toString(node: Node, indentation = ""): string {
   let result = `${indentation}${textToString(node)}`;
 
   for (const child of node.children) {
@@ -47,7 +46,7 @@ export function toString(node: Node, indentation = "") {
   return result;
 }
 
-export function toUnscheduledTask(sTask: STask, day: Moment) {
+export function toUnscheduledTask(sTask: STask, day: Moment): Task {
   return {
     durationMinutes: defaultDurationMinutes,
     symbol: sTask.symbol,
@@ -83,7 +82,7 @@ export function toTask(sTask: STask, day: Moment): Task {
 export function getScheduledDay(sTask: STask) {
   const scheduledPropDay = sTask.scheduled?.toFormat?.(defaultDayFormatForLuxon);
   const dailyNoteDay = getDateFromPath(sTask.path, "day")?.format(defaultDayFormat);
-  
+
   return scheduledPropDay || dailyNoteDay;
 }
 
@@ -101,25 +100,26 @@ export function toClockRecord(sTask: STask, clockMoments: ClockMoments) {
   };
 }
 
-export function toMarkdown(sTask: STask) {
+export function toMarkdown(sTask: STask): string {
   const baseIndent = "\t".repeat(sTask.position.start.col);
   const extraIndent = " ".repeat(indentBeforeTaskParagraph);
 
   return sTask.text
     .split("\n")
-    .map((line, i) => i === 0
-      ? `${baseIndent}${getListTokens(sTask)} ${line}`
-      : `${baseIndent}${extraIndent}${line}`
+    .map((line, i) =>
+      i === 0
+        ? `${baseIndent}${getListTokens(sTask)} ${line}`
+        : `${baseIndent}${extraIndent}${line}`
     )
     .join("\n");
 }
 
-export function getListTokens(task: TaskTokens) {
-  const checkbox = task.status === undefined ? "" : `[${task.status}]`;
+export function getListTokens(task: TaskTokens): string {
+  const checkbox = task.status !== undefined ? `[${task.status}]` : "";
   return `${task.symbol} ${checkbox}`.trim();
 }
 
-export function replaceSTaskInFile(contents: string, sTask: STask, newText: string) {
+export function replaceSTaskInFile(contents: string, sTask: STask, newText: string): string {
   const lines = contents.split("\n");
   const { start, end } = sTask.position;
 
