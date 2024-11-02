@@ -1,13 +1,18 @@
 <script lang="ts">
-  export let classNames: string | undefined = "";
+  import { type Snippet } from "svelte";
+  import { isNotVoid } from "typed-assert";
+
+  const {
+    children,
+    className,
+  }: { children: Snippet<[() => void]>; className?: string } = $props();
 
   let el: HTMLDivElement | undefined;
 
-  let customHeight = 0;
+  let customHeight = $state(0);
+  const height = $derived(customHeight === 0 ? "auto" : `${customHeight}px`);
 
-  $: height = customHeight === 0 ? "auto" : `${customHeight}px`;
-
-  let editingHeight = false;
+  let editingHeight = $state(false);
 
   function startEdit() {
     editingHeight = true;
@@ -31,6 +36,8 @@
       return;
     }
 
+    isNotVoid(el);
+
     const viewportToElOffsetY = el.getBoundingClientRect().top;
 
     customHeight = event.clientY - viewportToElOffsetY;
@@ -43,6 +50,6 @@
 />
 <svelte:window on:blur={handleBlur} />
 
-<div bind:this={el} style:height style:max-height="25vh" class={classNames}>
-  <slot {startEdit} />
+<div bind:this={el} style:height style:max-height="25vh" class={className}>
+  {@render children(startEdit)}
 </div>

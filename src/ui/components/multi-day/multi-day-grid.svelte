@@ -1,0 +1,291 @@
+<script lang="ts">
+  import type { Moment } from "moment";
+  import { Menu } from "obsidian";
+  import { getContext } from "svelte";
+  import { type Writable, get } from "svelte/store";
+  import { fly } from "svelte/transition";
+
+  import { dateRangeContextKey, obsidianContext } from "../../../constants";
+  import { isToday } from "../../../global-store/current-time";
+  import { getVisibleHours } from "../../../global-store/derived-settings";
+  import type { ObsidianContext } from "../../../types";
+  import { isOnWeekend } from "../../../util/moment";
+  import {
+    getNextAdjacentRange,
+    getNextWorkWeek,
+    getPreviousAdjacentRange,
+    getPreviousWorkWeek,
+  } from "../../../util/range";
+  import * as r from "../../../util/range";
+  import ControlButton from "../control-button.svelte";
+  import {
+    Settings,
+    ChevronLeft,
+    ChevronRight,
+    CalendarArrowUp,
+    Columns3,
+  } from "../lucide";
+  import ResizeHandle from "../resize-handle.svelte";
+  import ResizeableBox from "../resizeable-box.svelte";
+  import Ruler from "../ruler.svelte";
+  import Scroller from "../scroller.svelte";
+  import SettingsControls from "../settings-controls.svelte";
+  import Timeline from "../timeline.svelte";
+  import UnscheduledTaskContainer from "../unscheduled-task-container.svelte";
+
+  const { workspaceFacade, settings } =
+    getContext<ObsidianContext>(obsidianContext);
+  const dateRange = getContext<Writable<Moment[]>>(dateRangeContextKey);
+
+  let settingsVisible = $state(false);
+  let headerRef: HTMLDivElement | undefined;
+
+  function handleScroll(event: Event) {
+    if (headerRef && event.target instanceof Element) {
+      headerRef.scrollLeft = event.target.scrollLeft;
+    }
+  }
+</script>
+
+<div bind:this={headerRef} class="header">
+  <div class="header-row day-buttons">
+    <div class="corner"></div>
+    {#each $dateRange as day}
+      <div class="header-cell" class:today={$isToday(day)}>
+        <ControlButton
+          --color={$isToday(day) ? "white" : "var(--icon-color)"}
+          label="Open note for day"
+          onclick={async () => await workspaceFacade.openFileForDay(day)}
+        >
+          {day.format($settings.timelineDateFormat)}
+        </ControlButton>
+      </div>
+    {/each}
+  </div>
+
+  <ResizeableBox className="header-row">
+    {#snippet children(startEdit)}
+      <div class="corner"></div>
+      {#each $dateRange as day}
+        <div class="header-cell">
+          <UnscheduledTaskContainer {day} />
+        </div>
+      {/each}
+      <ResizeHandle on:mousedown={startEdit} />
+    {/snippet}
+  </ResizeableBox>
+</div>
+
+<div class="controls-sidebar">
+  <ControlButton
+    classes="settings-button"
+    isActive={settingsVisible}
+    onclick={() => {
+      settingsVisible = !settingsVisible;
+    }}
+  >
+    <Settings />
+  </ControlButton>
+
+  <ControlButton
+    label="Change columns"
+    onclick={(event) => {
+      const currentMode = get(settings).multiDayRange;
+      const menu = new Menu();
+
+      menu.addItem((item) =>
+        item
+          .setTitle("Full week")
+          .setChecked(currentMode === "full-week")
+          .onClick(() => {
+            settings.update((previous) => ({
+              ...previous,
+              multiDayRange: "full-week",
+            }));
+          }),
+      );
+      menu.addItem((item) => {
+        item
+          .setTitle("Work week")
+          .setChecked(currentMode === "work-week")
+          .onClick(() => {
+            settings.update((previous) => ({
+              ...previous,
+              multiDayRange: "work-week",
+            }));
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle("3 days")
+          .setChecked(currentMode === "3-days")
+          .onClick(() => {
+            settings.update((previous) => ({
+              ...previous,
+              multiDayRange: "3-days",
+            }));
+          });
+      });
+
+      menu.showAtMouseEvent(event);
+    }}
+  >
+    <Columns3 />
+  </ControlButton>
+
+  <ControlButton
+    label="Show current period"
+    onclick={() => {
+      dateRange.set(
+        r.createRange($settings.multiDayRange, $settings.firstDayOfWeek),
+      );
+    }}
+  >
+    <CalendarArrowUp />
+  </ControlButton>
+
+  <ControlButton
+    label="Show next period"
+    onclick={() => {
+      dateRange.update(
+        $settings.multiDayRange === "work-week"
+          ? ([firstDay]) => getNextWorkWeek(firstDay)
+          : getNextAdjacentRange,
+      );
+    }}
+  >
+    <ChevronRight />
+  </ControlButton>
+
+  <ControlButton
+    label="Show previous period"
+    onclick={() => {
+      dateRange.update(
+        $settings.multiDayRange === "work-week"
+          ? ([firstDay]) => getPreviousWorkWeek(firstDay)
+          : getPreviousAdjacentRange,
+      );
+    }}
+  >
+    <ChevronLeft />
+  </ControlButton>
+</div>
+
+{#if settingsVisible}
+  <div
+    class="settings-controls-container"
+    transition:fly={{ x: 400, duration: 100, opacity: 0.5 }}
+  >
+    <SettingsControls />
+  </div>
+{/if}
+
+<Scroller className="multiday-main-content" on:scroll={handleScroll}>
+  <Ruler
+    --ruler-box-shadow="var(--shadow-right)"
+    visibleHours={getVisibleHours($settings)}
+  />
+  {#each $dateRange as day}
+    <div class="day-column" class:weekend={isOnWeekend(day)}>
+      <Timeline {day} isUnderCursor={true} />
+    </div>
+  {/each}
+</Scroller>
+
+<style>
+  :global(.header-row) {
+    position: relative;
+    display: flex;
+  }
+
+  .day-buttons {
+    font-size: var(--font-ui-small);
+  }
+
+  .controls-sidebar {
+    display: flex;
+    grid-column: 2;
+    grid-row: 1 / 3;
+    flex-direction: column;
+    gap: var(--size-4-2);
+
+    padding: var(--size-4-2) var(--size-4-1);
+
+    border-left: 1px solid var(--background-modifier-border);
+  }
+
+  :global(.multiday-main-content) {
+    grid-row: 2;
+  }
+
+  .corner {
+    position: sticky;
+    z-index: 100;
+    top: 0;
+    left: 0;
+
+    flex: 0 0 var(--time-ruler-width);
+
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-top: none;
+    border-left: none;
+  }
+
+  .day-column {
+    display: flex;
+    flex: 1 0 200px;
+    flex-direction: column;
+
+    height: fit-content;
+
+    background-color: var(--background-secondary);
+    border-right: 1px solid var(--background-modifier-border);
+  }
+
+  .day-column:last-child {
+    border-right: none;
+  }
+
+  .header {
+    position: relative;
+    z-index: 1000;
+
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+
+    box-shadow: var(--shadow-bottom);
+  }
+
+  .header-cell {
+    overflow-x: hidden;
+    flex: 1 0 200px;
+
+    width: 200px;
+
+    background-color: var(--background-primary);
+    border-right: 1px solid var(--background-modifier-border);
+    border-bottom: 1px solid var(--background-modifier-border);
+  }
+
+  .header-cell:last-of-type {
+    flex: 1 0 calc(200px + var(--scrollbar-width));
+    border-right: none;
+  }
+
+  .today {
+    color: white;
+    background-color: var(--color-accent);
+  }
+
+  .weekend {
+    background-color: var(--background-primary);
+  }
+
+  .settings-controls-container {
+    grid-column: 3;
+    grid-row: span 2;
+    padding: 0 var(--size-4-2);
+  }
+</style>

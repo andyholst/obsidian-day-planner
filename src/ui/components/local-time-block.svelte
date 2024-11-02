@@ -2,22 +2,22 @@
   import { offset } from "@floating-ui/dom";
   import { getContext } from "svelte";
 
-  import { obsidianContext } from "../../constants";
-  import { ObsidianContext, Task } from "../../types";
-  import { copy } from "../../util/task-utils";
-  import { isTouchEvent } from "../../util/util";
-  import { EditHandlers } from "../hooks/use-edit/create-edit-handlers";
+  import { obsidianContext, vibrationDurationMillis } from "../../constants";
+  import type { LocalTask, WithPlacing, WithTime } from "../../task-types";
+  import type { ObsidianContext } from "../../types";
+  import * as t from "../../util/task-utils";
+  import { hoverPreview } from "../actions/hover-preview";
+  import type { EditHandlers } from "../hooks/use-edit/create-edit-handlers";
   import { EditMode } from "../hooks/use-edit/types";
   import { useFloatingUi } from "../hooks/use-floating-ui";
 
   import DragControls from "./drag-controls.svelte";
   import FloatingUi from "./floating-ui.svelte";
-  import MarkdownBlockContent from "./markdown-block-content.svelte";
   import RenderedMarkdown from "./rendered-markdown.svelte";
   import ResizeControls from "./resize-controls.svelte";
   import ScheduledTimeBlock from "./scheduled-time-block.svelte";
 
-  export let task: Task;
+  export let task: WithPlacing<WithTime<LocalTask>>;
   export let onGripMouseDown: EditHandlers["handleGripMouseDown"];
   export let onResizerMouseDown: EditHandlers["handleResizerMouseDown"];
   export let onFloatingUiPointerDown: (event: PointerEvent) => void;
@@ -51,18 +51,17 @@
 
 <ScheduledTimeBlock
   {task}
-  use={[drag.anchorSetup, resize.anchorSetup, resizeFromTop.anchorSetup]}
-  on:tap={onMouseUp}
+  use={[
+    drag.anchorSetup,
+    resize.anchorSetup,
+    resizeFromTop.anchorSetup,
+    (el: HTMLElement) => hoverPreview(el, task),
+  ]}
   on:longpress={() => {
-    navigator.vibrate(100);
+    navigator.vibrate(vibrationDurationMillis);
     isDragActive.set(true);
     isResizeActive.set(true);
     isResizeFromTopActive.set(true);
-  }}
-  on:pointerup={(event) => {
-    if (!isTouchEvent(event)) {
-      onMouseUp();
-    }
   }}
   on:pointerenter={(event) => {
     drag.handleAnchorPointerEnter(event);
@@ -74,10 +73,9 @@
     resize.handleAnchorPointerLeave(event);
     resizeFromTop.handleAnchorPointerLeave(event);
   }}
+  on:pointerup={onMouseUp}
 >
-  <MarkdownBlockContent {task}>
-    <RenderedMarkdown {task} />
-  </MarkdownBlockContent>
+  <RenderedMarkdown {task} />
 </ScheduledTimeBlock>
 
 {#if !$editOperation}
@@ -90,7 +88,7 @@
     >
       <DragControls
         onCopy={() => {
-          onGripMouseDown(copy(task), EditMode.DRAG);
+          onGripMouseDown(t.copy(task), EditMode.DRAG);
         }}
         onMove={() => onGripMouseDown(task, EditMode.DRAG)}
         onMoveWithNeighbors={() => {

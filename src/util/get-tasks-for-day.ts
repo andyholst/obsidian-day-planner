@@ -1,28 +1,41 @@
 import { partition } from "lodash/fp";
-import { Moment } from "moment/moment";
+import type { Moment } from "moment/moment";
 import { STask } from "obsidian-dataview";
 
-import { timeFromStartRegExp } from "../regexp";
-import { DayPlannerSettings } from "../settings";
-import { Task } from "../types";
+import { testTimestampPatterns } from "../parser/parser";
+import type { DayPlannerSettings } from "../settings";
+import type { LocalTask, TaskWithoutComputedDuration } from "../task-types";
 
-import { toTask, toUnscheduledTask } from "./dataview";
-
-function isTimeSetOnTask(task: STask) {
-  return timeFromStartRegExp.test(task.text);
-}
+import * as dataview from "./dataview";
+import { getMinutesSinceMidnight } from "./moment";
 
 type DurationOptions = Pick<
   DayPlannerSettings,
   "defaultDurationMinutes" | "extendDurationUntilNext"
 >;
 
-function calculateDuration(tasks: Task[], options: DurationOptions) {
-  return tasks.map((current, i, array) => {
-    if (current.durationMinutes) return current;
+function calculateDuration(
+  tasks: TaskWithoutComputedDuration[],
+  options: DurationOptions,
+): LocalTask[] {
+  return tasks.map((current, i, array): LocalTask => {
+    if (current.durationMinutes) {
+      return current as LocalTask;
+    }
 
     const next = array[i + 1];
     const shouldExtendUntilNext = next && options.extendDurationUntilNext;
+
+    if (shouldExtendUntilNext) {
+      const minutesUntilNext =
+        getMinutesSinceMidnight(next.startTime) -
+        getMinutesSinceMidnight(current.startTime);
+
+      return {
+        ...current,
+        durationMinutes: minutesUntilNext,
+      };
+    }
 
     return {
       ...current,
@@ -38,12 +51,20 @@ export function mapToTasksForDay(
   tasksForDay: STask[],
   settings: DayPlannerSettings,
 ) {
-  const [withTime, withoutTime] = partition(isTimeSetOnTask, tasksForDay);
+  // todo: since we don't need to preserve this partition, we can shorten this
+  const [withTime, withoutTime] = partition(
+    ({ text }) => testTimestampPatterns(text),
+    tasksForDay,
+  );
 
-  const { parsed: tasksWithTime, errors } = withTime.reduce(
+  const { parsed: tasksWithoutComputedDuration } = withTime.reduce<{
+    parsed: TaskWithoutComputedDuration[];
+    errors: unknown[];
+  }>(
     (result, sTask) => {
       try {
-        const task = toTask(sTask, day);
+        const task = dataview.toTask(sTask, day);
+
         result.parsed.push(task);
       } catch (error) {
         result.errors.push(error);
@@ -53,16 +74,25 @@ export function mapToTasksForDay(
     { parsed: [], errors: [] }
   );
 
-  tasksWithTime.sort((a, b) => a.startMinutes - b.startMinutes);
+  tasksWithoutComputedDuration.sort((a, b) => a.startTime.diff(b.startTime));
+  const withTimeAndDuration = calculateDuration(
+    tasksWithoutComputedDuration,
+    settings,
+  );
 
   const noTime = withoutTime
     .filter((sTask) => {
-      return sTask.task && (settings.showUnscheduledNestedTasks || !sTask.parent);
+      if (!sTask.task || sTask.text.trim().length === 0) {
+        return false;
+      }
+
+      if (settings.showUnscheduledNestedTasks) {
+        return true;
+      }
+
+      return !sTask.parent;
     })
-    .map((sTask) => toUnscheduledTask(sTask, day));
+    .map((sTask: STask) => dataview.toUnscheduledTask(sTask, day));
 
-  // Calculate durations for tasks with time.
-  const withTimeAndDuration = calculateDuration(tasksWithTime, settings);
-
-  return { withTime: withTimeAndDuration, noTime, errors };
+  return [...withTimeAndDuration, ...noTime];
 }

@@ -1,6 +1,7 @@
-import { Moment } from "moment";
+import type { Moment } from "moment";
 
-import type { Task } from "../../../types";
+import type { DayPlannerSettings } from "../../../settings";
+import type { LocalTask, WithTime } from "../../../task-types";
 
 export enum EditMode {
   DRAG = "DRAG",
@@ -16,7 +17,15 @@ export enum EditMode {
 }
 
 export interface EditOperation {
-  task: Task;
+  task: WithTime<LocalTask>;
   mode: EditMode;
   day: Moment;
 }
+
+export type TaskTransformer = (
+  baseline: WithTime<LocalTask>[],
+  editTarget: WithTime<LocalTask>,
+  cursorTime: number,
+  settings: DayPlannerSettings,
+  day?: Moment,
+) => WithTime<LocalTask>[];

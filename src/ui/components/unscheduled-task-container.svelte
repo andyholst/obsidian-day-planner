@@ -1,13 +1,16 @@
 <script lang="ts">
-  import { Moment } from "moment";
+  import type { Moment } from "moment";
   import { OverlayScrollbarsComponent } from "overlayscrollbars-svelte";
   import { getContext } from "svelte";
 
   import { obsidianContext } from "../../constants";
   import { settings } from "../../global-store/settings";
-  import type { ObsidianContext } from "../../types";
-  
-import UnscheduledTimeBlock from "./unscheduled-time-block.svelte";
+  import { isLocal } from "../../task-types";
+  import { type ObsidianContext } from "../../types";
+
+  import RemoteTimeBlock from "./remote-time-block.svelte";
+  import TimeBlockBase from "./time-block-base.svelte";
+  import UnscheduledTimeBlock from "./unscheduled-time-block.svelte";
 
   export let day: Moment;
 
@@ -16,26 +19,32 @@ import UnscheduledTimeBlock from "./unscheduled-time-block.svelte";
   } = getContext<ObsidianContext>(obsidianContext);
 
   $: ({
-    displayedTasks,
+    displayedTasksForDay,
     handleTaskMouseUp,
     handleUnscheduledTaskGripMouseDown,
   } = getEditHandlers(day));
 </script>
 
-{#if $displayedTasks.noTime.length > 0 && $settings.showUncheduledTasks}
+{#if $displayedTasksForDay.noTime.length > 0 && $settings.showUncheduledTasks}
   <OverlayScrollbarsComponent
     class="unscheduled-task-container overlayscrollbars-svelte"
     defer
     options={{ scrollbars: { theme: "os-theme-custom" } }}
   >
-    {#each $displayedTasks.noTime as task}
-      <UnscheduledTimeBlock
-        onGripMouseDown={handleUnscheduledTaskGripMouseDown}
-        onMouseUp={() => {
-          handleTaskMouseUp(task);
-        }}
-        {task}
-      />
+    {#each $displayedTasksForDay.noTime as task}
+      {#if isLocal(task)}
+        <UnscheduledTimeBlock
+          onGripMouseDown={handleUnscheduledTaskGripMouseDown}
+          onMouseUp={() => {
+            handleTaskMouseUp(task);
+          }}
+          {task}
+        />
+      {:else}
+        <TimeBlockBase {task}>
+          <RemoteTimeBlock {task} />
+        </TimeBlockBase>
+      {/if}
     {/each}
   </OverlayScrollbarsComponent>
 {/if}

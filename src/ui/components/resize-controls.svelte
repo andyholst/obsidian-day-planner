@@ -7,8 +7,7 @@
   export let onResize: (event: PointerEvent) => void;
   export let onResizeWithNeighbors: (event: PointerEvent) => void;
   export let onResizeWithShrink: (event: PointerEvent) => void;
-  export let onPointerDown: (event: PointerEvent) => void | undefined =
-    undefined;
+  export let onPointerDown: (event: PointerEvent) => void = () => {};
   export let reverse: boolean | undefined = false;
 </script>
 

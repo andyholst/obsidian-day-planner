@@ -12,7 +12,8 @@ import { locToEditorPosition } from "../util/editor";
 import { withNotice } from "../util/with-notice";
 
 import { DataviewFacade } from "./dataview-facade";
-import { ObsidianFacade } from "./obsidian-facade";
+import type { VaultFacade } from "./vault-facade";
+import { WorkspaceFacade } from "./workspace-facade";
 
 export class STaskEditor {
   constructor(
@@ -21,21 +22,33 @@ export class STaskEditor {
   ) {}
 
   clockOut = withNotice(async (sTask: STask) => {
-    const updatedMarkdown = toMarkdown(withActiveClockCompleted(sTask));
-    await this.obsidianFacade.editFile(sTask.path, (contents) =>
-      replaceSTaskInFile(contents, sTask, updatedMarkdown),
+    await this.vaultFacade.editFile(sTask.path, (contents) =>
+      replaceSTaskInFile(
+        contents,
+        sTask,
+        toMarkdown(withActiveClockCompleted(sTask)),
+      ),
     );
   });
 
   cancelClock = withNotice(async (sTask: STask) => {
-    const updatedMarkdown = toMarkdown(withoutActiveClock(sTask));
-    await this.obsidianFacade.editFile(sTask.path, (contents) =>
-      replaceSTaskInFile(contents, sTask, updatedMarkdown),
+    await this.vaultFacade.editFile(sTask.path, (contents) =>
+      replaceSTaskInFile(
+        contents,
+        sTask,
+        toMarkdown(withoutActiveClock(sTask)),
+      ),
     );
   });
 
+  constructor(
+    private readonly workspaceFacade: WorkspaceFacade,
+    private readonly vaultFacade: VaultFacade,
+    private readonly dataviewFacade: DataviewFacade,
+  ) {}
+
   private replaceSTaskUnderCursor = (newMarkdown: string) => {
-    const view = this.obsidianFacade.getActiveMarkdownView();
+    const view = this.workspaceFacade.getActiveMarkdownView();
     const sTask = this.getSTaskUnderCursorFromLastView();
 
     view.editor.replaceRange(
@@ -45,9 +58,10 @@ export class STaskEditor {
     );
   };
 
-  private getSTaskUnderCursorFromLastView = (): STask => {
-    const location = this.obsidianFacade.getLastCaretLocation();
-    const sTask = this.dataviewFacade.getTaskFromCaretLocation(location);
+  private getSTaskUnderCursorFromLastView = () => {
+    const sTask = this.dataviewFacade.getTaskFromCaretLocation(
+      this.workspaceFacade.getLastCaretLocation(),
+    );
 
     isNotVoid(sTask, "No task under cursor");
     return sTask;

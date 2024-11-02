@@ -1,4 +1,6 @@
 import type { Moment } from "moment/moment";
+
+import type { DayPlannerSettings } from "../settings";
 import type { RelationToNow } from "../types";
 
 const moment = window.moment;
@@ -18,20 +20,19 @@ export function getDiffInMinutes(a: Moment, b: Moment): number {
   return Math.abs(a.diff(b, "minutes"));
 }
 
-export function getDaysOfCurrentWeek(): Moment[] {
-  return getDaysOfWeek(window.moment());
-}
+export function getMomentFromDayOfWeek(
+  startingDay: Moment,
+  firstDayOFWeek: DayPlannerSettings["firstDayOfWeek"],
+) {
+  const startOfIsoWeek = startingDay.startOf("isoWeek");
+  const subtractDays: Record<DayPlannerSettings["firstDayOfWeek"], number> = {
+    monday: 0,
+    sunday: 1,
+    saturday: 2,
+    friday: 3,
+  };
 
-export function getDaysOfWeek(moment: Moment): Moment[] {
-  const firstDay = moment.clone().startOf("isoWeek");
-  const days = new Array<Moment>(7);
-  days[0] = firstDay;
-
-  for (let i = 1; i < 7; i++) {
-    days[i] = firstDay.clone().add(i, "day");
-  }
-
-  return days;
+  return startOfIsoWeek.subtract(subtractDays[firstDayOFWeek], "days");
 }
 
 export function minutesToMomentOfDay(
@@ -87,8 +88,16 @@ export function splitMultiday(
   return splitMultiday(newStart, end, chunks);
 }
 
-export function getEarliestMoment(moments: Moment[]): Moment {
-  return moments.reduce((result, current) =>
-    current.isBefore(result) ? current : result
-  );
+export function getEarliestMoment(moments: Moment[]) {
+  return moments.reduce((result, current) => {
+    if (current.isBefore(result)) {
+      return current;
+    }
+
+    return result;
+  });
+}
+
+export function isOnWeekend(day: Moment) {
+  return day.isoWeekday() === 6 || day.isoWeekday() === 7;
 }

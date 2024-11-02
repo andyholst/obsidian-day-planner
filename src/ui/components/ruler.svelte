@@ -8,7 +8,7 @@
 
 <div class="hours-container">
   {#each visibleHours as hour}
-    <div style:height="{getHourSize($settings)}px" class="hour">
+    <div style:flex-basis="{getHourSize($settings)}px" class="hour">
       <div class="hour-number-container">
         {hoursToMoment(hour).format($settings.hourFormat)}
       </div>
@@ -23,12 +23,16 @@
     left: 0;
 
     display: flex;
+
+    /* TODO: move to variable */
     flex: 0 0 30px;
     flex-direction: column;
 
+    height: fit-content;
+
     background-color: var(--background-primary);
     border-right: 1px solid var(--background-modifier-border);
-    box-shadow: var(--ruler-box-shadow, none)
+    box-shadow: var(--ruler-box-shadow, none);
   }
 
   .hour {

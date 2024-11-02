@@ -1,47 +1,44 @@
 <script lang="ts">
-  import { Moment } from "moment";
+  import type { Moment } from "moment";
   import { getContext } from "svelte";
-  import { Writable } from "svelte/store";
+  import { isNotVoid } from "typed-assert";
 
-  import { dateRangeContextKey, obsidianContext } from "../../constants";
+  import { obsidianContext } from "../../constants";
   import { isToday } from "../../global-store/current-time";
   import { getVisibleHours, snap } from "../../global-store/derived-settings";
   import { settings } from "../../global-store/settings";
-  import { ObsidianContext } from "../../types";
+  import { isRemote } from "../../task-types";
+  import { type ObsidianContext } from "../../types";
   import { getRenderKey } from "../../util/task-utils";
   import { isTouchEvent } from "../../util/util";
-  import { styledCursor } from "../actions/styled-cursor";
 
   import Column from "./column.svelte";
   import LocalTimeBlock from "./local-time-block.svelte";
   import Needle from "./needle.svelte";
   import RemoteTimeBlock from "./remote-time-block.svelte";
+  import ScheduledTimeBlock from "./scheduled-time-block.svelte";
 
-  // TODO: showRuler or add <slot name="left-gutter" />
-  export let day: Moment | undefined = undefined;
+  export let day: Moment;
   export let isUnderCursor = false;
 
   const {
-    editContext: { confirmEdit, getEditHandlers },
+    editContext: { confirmEdit, getEditHandlers, pointerOffsetY },
   } = getContext<ObsidianContext>(obsidianContext);
-  const dateRange = getContext<Writable<Moment[]>>(dateRangeContextKey);
 
-  $: actualDay = day || $dateRange[0];
   $: ({
-    displayedTasks,
-    cancelEdit,
+    displayedTasksForDay,
     handleContainerMouseDown,
     handleResizerMouseDown,
     handleTaskMouseUp,
     handleGripMouseDown,
     handleMouseEnter,
-    pointerOffsetY,
-    cursor,
-  } = getEditHandlers(actualDay));
+  } = getEditHandlers(day));
 
   let el: HTMLElement | undefined;
 
   function updatePointerOffsetY(event: PointerEvent) {
+    isNotVoid(el);
+
     const viewportToElOffsetY = el.getBoundingClientRect().top;
     const borderTopToPointerOffsetY = event.clientY - viewportToElOffsetY;
 
@@ -49,13 +46,8 @@
   }
 </script>
 
-<!--TODO: duplicate of <GlobalHandlers />-->
-<svelte:window on:blur={cancelEdit} />
-<svelte:body use:styledCursor={$cursor.bodyCursor} />
-<svelte:document on:pointerup={cancelEdit} />
-
 <Column visibleHours={getVisibleHours($settings)}>
-  {#if $isToday(actualDay)}
+  {#if $isToday(day)}
     <Needle autoScrollBlocked={isUnderCursor} />
   {/if}
 
@@ -74,15 +66,17 @@
     on:pointerup={confirmEdit}
     on:pointerup|stopPropagation
   >
-    {#each $displayedTasks.withTime as task (getRenderKey(task))}
-      {#if task.calendar}
-        <RemoteTimeBlock {task} />
+    {#each $displayedTasksForDay.withTime as task (getRenderKey(task))}
+      {#if isRemote(task)}
+        <ScheduledTimeBlock {task}>
+          <RemoteTimeBlock {task} />
+        </ScheduledTimeBlock>
       {:else}
         <LocalTimeBlock
           onFloatingUiPointerDown={updatePointerOffsetY}
           onGripMouseDown={handleGripMouseDown}
           onMouseUp={() => {
-              handleTaskMouseUp(task);
+            handleTaskMouseUp(task);
           }}
           onResizerMouseDown={handleResizerMouseDown}
           {task}

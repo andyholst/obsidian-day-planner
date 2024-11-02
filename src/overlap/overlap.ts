@@ -1,7 +1,10 @@
 import Fraction from "fraction.js";
 import { partition } from "lodash/fp";
+import { isNotVoid } from "typed-assert";
 
-import type { Overlap, TimeBlock, Task } from "../types";
+import type { TimeBlock } from "../task-types";
+import type { Overlap } from "../types";
+import { getMinutesSinceMidnight } from "../util/moment";
 import { getEndMinutes } from "../util/task-utils";
 
 import { getHorizontalPlacing } from "./horizontal-placing";
@@ -40,7 +43,7 @@ function getItemsOverlappingItemAndEachOther(
       },
       [item],
     )
-    .sort((a, b) => a.startMinutes - b.startMinutes);
+    .sort((a, b) => a.startTime.diff(b.startTime));
 }
 
 function computeOverlapForGroup(
@@ -59,8 +62,11 @@ function computeOverlapForGroup(
   }
 
   const fractionOfPlacedItems = itemsPlacedPreviously.reduce((sum, current) => {
-    const { span, columns } = newLookup.get(current.id);
-    return new Fraction(span, columns).add(sum);
+    const placing = newLookup.get(current.id);
+
+    isNotVoid(placing);
+
+    return new Fraction(placing.span, placing.columns).add(sum);
   }, new Fraction(0));
 
   const fractionForNewItems = new Fraction(1).sub(fractionOfPlacedItems);
@@ -74,7 +80,11 @@ function computeOverlapForGroup(
   const slots = Array(columnsForNewGroup).fill(empty);
 
   itemsPlacedPreviously.forEach((item) => {
-    const { start, span, columns: previousColumns } = newLookup.get(item.id);
+    const placing = newLookup.get(item.id);
+
+    isNotVoid(placing);
+
+    const { start, span, columns: previousColumns } = placing;
 
     const scale = columnsForNewGroup / previousColumns;
     const scaledStart = scale * start;
@@ -112,19 +122,22 @@ function computeOverlapForGroup(
 }
 
 function overlaps(a: TimeBlock, b: TimeBlock) {
-  const [early, late] = a.startMinutes < b.startMinutes ? [a, b] : [b, a];
+  const [early, late] =
+    getMinutesSinceMidnight(a.startTime) < getMinutesSinceMidnight(b.startTime)
+      ? [a, b]
+      : [b, a];
 
-  return getEndMinutes(early) > late.startMinutes;
+  return getEndMinutes(early) > getMinutesSinceMidnight(late.startTime);
 }
 
-export function addHorizontalPlacing(tasks: Task[]) {
-  if (tasks.length === 0) {
+export function addHorizontalPlacing(blocks: Array<TimeBlock>) {
+  if (blocks.length === 0) {
     return [];
   }
 
-  const overlapLookup = computeOverlap(tasks);
+  const overlapLookup = computeOverlap(blocks);
 
-  return tasks.map((task) => {
+  return blocks.map((task) => {
     const overlap = overlapLookup.get(task.id);
 
     return {

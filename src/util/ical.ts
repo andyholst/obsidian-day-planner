@@ -1,16 +1,13 @@
-import moment, { Moment } from "moment";
+import moment, { type Moment } from "moment";
 import { tz } from "moment-timezone";
-import ical from "node-ical";
+import ical, { type AttendeePartStat } from "node-ical";
 
-import {
-  defaultDurationMinutes,
-  noTitle,
-  originalRecurrenceDayKeyFormat,
-} from "../constants";
-import { Task, UnscheduledTask, WithIcalConfig } from "../types";
+import { fallbackPartStat, noTitle, icalDayKeyFormat } from "../constants";
+import type { RemoteTask, WithTime } from "../task-types";
+import type { WithIcalConfig } from "../types";
 
 import { getId } from "./id";
-import { getMinutesSinceMidnight } from "./moment";
+import { liftToArray } from "./lift";
 
 export function canHappenAfter(icalEvent: ical.VEvent, date: Date) {
   if (!icalEvent.rrule) {
@@ -23,14 +20,24 @@ export function canHappenAfter(icalEvent: ical.VEvent, date: Date) {
   );
 }
 
-function hasRecurrenceOverride(icalEvent: ical.VEvent, date: Date) {
+function hasRecurrenceOverrideForDate(icalEvent: ical.VEvent, date: Date) {
   if (!icalEvent.recurrences) {
     return false;
   }
 
-  const dateKey = moment(date).format(originalRecurrenceDayKeyFormat);
+  return Object.hasOwn(icalEvent.recurrences, getIcalDayKey(date));
+}
 
-  return Object.hasOwn(icalEvent.recurrences, dateKey);
+function getIcalDayKey(date: Date) {
+  return moment(date).format(icalDayKeyFormat);
+}
+
+function hasExceptionForDate(icalEvent: ical.VEvent, date: Date) {
+  if (!icalEvent.exdate) {
+    return false;
+  }
+
+  return Object.keys(icalEvent.exdate).includes(getIcalDayKey(date));
 }
 
 export function icalEventToTasks(
@@ -38,7 +45,6 @@ export function icalEventToTasks(
   day: Moment,
 ) {
   if (icalEvent.rrule) {
-    // todo: don't clone and modify them every single time
     const startOfDay = day.clone().startOf("day").toDate();
     const endOfDay = day.clone().endOf("day").toDate();
 
@@ -52,13 +58,16 @@ export function icalEventToTasks(
 
     const recurrences = icalEvent.rrule
       ?.between(startOfDay, endOfDay)
-      .filter((date) => !hasRecurrenceOverride(icalEvent, date))
+      .filter(
+        (date) =>
+          !hasRecurrenceOverrideForDate(icalEvent, date) &&
+          !hasExceptionForDate(icalEvent, date),
+      )
       .map((date) => icalEventToTask(icalEvent, date));
 
     return [...recurrences, ...recurrenceOverrides];
   }
 
-  // todo: do this once
   const eventStart = window.moment(icalEvent.start);
   const startsOnVisibleDay = day.isSame(eventStart, "day");
 
@@ -70,7 +79,7 @@ export function icalEventToTasks(
 function icalEventToTask(
   icalEvent: WithIcalConfig<ical.VEvent>,
   date: Date,
-): Task | UnscheduledTask {
+): RemoteTask | WithTime<RemoteTask> {
   let startTimeAdjusted = window.moment(date);
   const tzid = icalEvent.rrule?.origOptions?.tzid;
 
@@ -80,29 +89,42 @@ function icalEventToTask(
   }
 
   const isAllDayEvent = icalEvent.datetype === "date";
+  const rsvpStatus = getRsvpStatus(icalEvent, icalEvent.calendar.email);
 
   const base = {
-    calendar: icalEvent.calendar,
     id: getId(),
-    text: icalEvent.summary || noTitle,
+    calendar: icalEvent.calendar,
+    summary: icalEvent.summary || noTitle,
     startTime: startTimeAdjusted,
-    readonly: true,
-    symbol: "-",
+    rsvpStatus,
   };
 
   if (isAllDayEvent) {
-    return {
-      ...base,
-      durationMinutes: defaultDurationMinutes,
-    };
+    return { ...base, isAllDayEvent: true };
   }
 
   return {
     ...base,
-    startMinutes: getMinutesSinceMidnight(startTimeAdjusted),
+    isAllDayEvent: false,
     durationMinutes:
       (icalEvent.end.getTime() - icalEvent.start.getTime()) / 1000 / 60,
   };
+}
+
+function getRsvpStatus(event: ical.VEvent, email?: string): AttendeePartStat {
+  if (!email?.trim()) {
+    return fallbackPartStat;
+  }
+
+  const attendeeWithMatchingEmail = liftToArray(event.attendee).find(
+    (attendee) => typeof attendee !== "string" && attendee?.params.CN === email,
+  );
+
+  if (typeof attendeeWithMatchingEmail === "string") {
+    throw new Error("Unexpected attendee format");
+  }
+
+  return attendeeWithMatchingEmail?.params.PARTSTAT || fallbackPartStat;
 }
 
 function adjustForOtherZones(tzid: string, currentDate: Date) {

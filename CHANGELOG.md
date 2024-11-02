@@ -1,7 +1,69 @@
-## 0.22.0.1
+## 0.25.0
 
-Resolved conficts between 0.21.1.2 and 0.22.0 and refactored some specific files to increase performance and reduce
-memory footprint.
+### 💥 Breaking changes
+
+- Now only the items under the planner heading will get pulled from daily notes (#382)
+
+### ✨ New features
+
+- Now after edits there is an **UNDO** notice that lets you revert the changes to tasks, even across multiple files (partially addresses #341)
+- Now the plugin will ask for permission before creating new files on drag-and-drop edits
+- Tasks crossing midnight now get shown properly in multiple day columns instead of stretching the first day (#586, #364)
+  - E.g.: `- 23:00 - 4:00 Task` will get shown in 2 columns as 2 separate blocks
+- Timeline controls look tidier now
+- Now all-day remote events are shown in the unscheduled tasks section
+- Text in blocks is now sticky and will stay visible when scrolling as well as when an event starts before the configured start hour
+
+#### Week planner -> multi-day planner
+
+- Now you can switch between 3 views:
+  - **full week** (with configurable start of the week)
+  - **work week** (starting on Monday)
+  - **3 upcoming days** (#515)
+- You can now configure the first day of the week (#231)
+- Now you can move back and forth between time periods from the sidebar of the multiday-view (#458, #495)
+- Now weekends get marked by a different background color
+- Now you an open plugin settings from the multi-day view
+- Now the time period of the open view is visible in its tab title
+- Now you can open the multi-day view from the left ribbon
+
+### 🐞 Fixed issues
+
+- Now the plugin finds contrasting font colors for your color overrides for time blocks (#481)
+- obsidian-tasks tasks now get copied under the original line in the original file
+- Now copying a task also copies the sub-items under it
+- Extra spaces no longer get added in edited files
+
+## 0.24.0
+
+### ✨ New features
+
+- Active task end time is now shown in status bar
+- Notifications now show timestamps
+
+### 🐞 Fixed issues
+
+- Now tasks with no text content are not shown in timeline
+- Fixed deleted recurrences of events in remote calendars showing up
+- Fixed 12 am parsed as noon
+
+## 0.23.0
+
+### ✨ New features
+
+- Now clicking on checkboxes on the timeline completes a task. [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) logic is also respected: recurrent tasks get updated, 'finished' property gets added
+- There is now an option to sort items by time in your planner after an edit (thanks, @Gelio)
+- You can now configure what kind of task to create on edit: bullet (`- task`) or checkbox (`- [ ] task`)
+- Minimal task duration is now configurable. Now tasks won't shrink beyond this point when editing
+- Timestamps get parsed anywhere on the line, not only at the start, e.g.: `- [ ] #task 20:30 - 21:00 Wake up`
+  - Note that if a timestamp is not at the start of the line, it needs to be in a stricter format to avoid confusing the plugin
+    - `20:00` will work
+    - `2000` will not work
+- There is now an option to specify your email in remote calendar config. If you do this, your RSVP status (declined/tentative) will get displayed on remote tasks from this calendar (thanks, @ramandv)
+
+### 🐞 Fixed issues
+
+- Now timeline will stay where you've left it when you reload Obsidian (thanks, @k4a-l)
 
 ## 0.22.0
 
@@ -83,12 +145,12 @@ Linux context with the command "make run".
 
 - ✨ Color coding: you can define background color for blocks containing certain text in first line
 - ✨ Weekly view now displays unscheduled tasks on top
-- ✨ Advanced drag-and-drop editing does not require modifier keys any more, you pick current edit mode in timeline controls 
+- ✨ Advanced drag-and-drop editing does not require modifier keys any more, you pick current edit mode in timeline controls
 
 ### Fixed issues
 
 - 🐞 Fixed scheduling tasks for other days than today (by @Lunkle)
-- 🐞 Pointer to current time is now more visible 
+- 🐞 Pointer to current time is now more visible
 - 🐞 Task summary in internet calendars is now displayed next to calendar name, to make it visible in short blocks
 
 ## 0.19.1 - 0.19.6

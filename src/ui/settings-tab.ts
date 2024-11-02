@@ -1,9 +1,15 @@
+import { produce } from "immer";
 import { PluginSettingTab, Setting } from "obsidian";
 import type { Writable } from "svelte/store";
+import { isOneOf } from "typed-assert";
 
 import { icons } from "../constants";
 import type DayPlanner from "../main";
-import type { DayPlannerSettings } from "../settings";
+import {
+  type DayPlannerSettings,
+  eventFormats,
+  firstDaysOfWeek,
+} from "../settings";
 
 export class DayPlannerSettingsTab extends PluginSettingTab {
   constructor(
@@ -29,40 +35,6 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Default task status on creation")
-      .setDesc(
-        "You can use custom statuses for more advanced workflows. E.g.: '- [>] Task'",
-      )
-      .addText((el) =>
-        el
-          .setPlaceholder("Empty")
-          .setValue(this.plugin.settings().taskStatusOnCreation)
-          .onChange((value: string) => {
-            this.settingsStore.update((previous) => {
-              const newValue = value.length > 0 ? value.substring(0, 1) : " ";
-
-              return {
-                ...previous,
-                taskStatusOnCreation: newValue,
-              };
-            });
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Round time to minutes")
-      .setDesc("While editing, tasks are going to get rounded to this number")
-      .addSlider((slider) =>
-        slider
-          .setLimits(5, 20, 5)
-          .setValue(this.plugin.settings().snapStepMinutes)
-          .setDynamicTooltip()
-          .onChange((value: number) => {
-            this.update({ snapStepMinutes: value });
-          }),
-      );
-
-    new Setting(containerEl)
       .setName("Task Notification")
       .setDesc("Display a notification when a new task is started")
       .addToggle((toggle) =>
@@ -72,6 +44,45 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
             this.update({ showTaskNotification: value });
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Center the Pointer in the Timeline View")
+      .setDesc(
+        "Should the pointer continuously get scrolled to the center of the view",
+      )
+      .addToggle((component) => {
+        component
+          .setValue(this.plugin.settings().centerNeedle)
+          .onChange((value) => {
+            this.update({ centerNeedle: value });
+          });
+      });
+
+    new Setting(containerEl)
+      .setName("Sort tasks in planner chronologically after edits")
+      .addToggle((component) => {
+        component
+          .setValue(this.plugin.settings().sortTasksInPlanAfterEdit)
+          .onChange((value) => {
+            this.update({ sortTasksInPlanAfterEdit: value });
+          });
+      });
+    new Setting(containerEl)
+      .setName("Event format on creation")
+      .addDropdown((dropdown) => {
+        dropdown.addOptions({
+          bullet: `Bullet (- New item)`,
+          task: `Task (- [ ] New item)`,
+        });
+        return dropdown
+          .setValue(this.plugin.settings().eventFormatOnCreation)
+          .onChange((value) => {
+            isOneOf(value, eventFormats);
+
+            this.update({ eventFormatOnCreation: value });
+            this.display();
+          });
+      });
 
     new Setting(containerEl)
       .setName("Timeline Zoom Level")
@@ -87,6 +98,29 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
             this.update({ zoomLevel: value });
           }),
       );
+
+    if (this.plugin.settings().eventFormatOnCreation === "task") {
+      new Setting(containerEl)
+        .setName("Default task status on creation")
+        .setDesc(
+          "You can use custom statuses for more advanced workflows. E.g.: '- [>] Task'",
+        )
+        .addText((el) =>
+          el
+            .setPlaceholder("Empty")
+            .setValue(this.plugin.settings().taskStatusOnCreation)
+            .onChange((value: string) => {
+              this.settingsStore.update((previous) => {
+                const newValue = value.length > 0 ? value.substring(0, 1) : " ";
+
+                return {
+                  ...previous,
+                  taskStatusOnCreation: newValue,
+                };
+              });
+            }),
+        );
+    }
 
     new Setting(containerEl)
       .setName("Timeline Icon")
@@ -133,87 +167,109 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Center the Pointer in the Timeline View")
-      .setDesc(
-        "Should the pointer continuously get scrolled to the center of the view",
-      )
-      .addToggle((component) => {
+      .setName("First day of week")
+      .addDropdown((component) =>
         component
-          .setValue(this.plugin.settings().centerNeedle)
-          .onChange((value) => {
-            this.update({ centerNeedle: value });
-          });
-      });
+          .addOptions({
+            monday: "Monday",
+            sunday: "Sunday",
+            saturday: "Saturday",
+            friday: "Friday",
+          })
+          .setValue(String(this.plugin.settings().firstDayOfWeek))
+          .onChange((value: string) => {
+            isOneOf(value, firstDaysOfWeek);
+
+            this.update({ firstDayOfWeek: value });
+          }),
+      );
 
     containerEl.createEl("h2", { text: "Remote calendars" });
 
-    this.plugin.settings().icals.map((ical, index) =>
+    this.plugin.settings().icals.map((ical, index) => {
+      containerEl.createEl("h2", { text: `Calendar ${index + 1}` });
+
       new Setting(containerEl)
-        .setName(`Calendar ${index + 1}`)
+        .setName("Mark calendar with color")
         .addColorPicker((el) =>
-          // todo: replace with immer
           el.setValue(ical.color).onChange((value: string) => {
-            this.settingsStore.update((previous) => ({
-              ...previous,
-              icals: previous.icals.map((editedIcal, editedIndex) =>
-                editedIndex === index
-                  ? { ...editedIcal, color: value }
-                  : editedIcal,
-              ),
-            }));
+            this.settingsStore.update(
+              produce((draft) => {
+                draft.icals[index].color = value;
+              }),
+            );
           }),
-        )
+        );
+
+      new Setting(containerEl)
+        .setName("Prepend this text to events from this calendar")
         .addText((el) =>
           el
             .setPlaceholder("Displayed name")
             .setValue(ical.name)
             .onChange((value: string) => {
-              this.settingsStore.update((previous) => ({
-                ...previous,
-                icals: previous.icals.map((editedIcal, editedIndex) =>
-                  editedIndex === index
-                    ? { ...editedIcal, name: value }
-                    : editedIcal,
-                ),
-              }));
+              this.settingsStore.update(
+                produce((draft) => {
+                  draft.icals[index].name = value;
+                }),
+              );
             }),
+        );
+
+      new Setting(containerEl)
+        .setName(
+          "Your email address, used to show 'tentative'/'needs action'/'declined' marker",
         )
         .addText((el) =>
           el
-            .setPlaceholder("URL")
-            .setValue(ical.url)
+            .setPlaceholder("Your email address")
+            .setValue(ical.email || "")
             .onChange((value: string) => {
-              this.settingsStore.update((previous) => ({
-                ...previous,
-                icals: previous.icals.map((editedIcal, editedIndex) =>
-                  editedIndex === index
-                    ? { ...editedIcal, url: value }
-                    : editedIcal,
-                ),
-              }));
+              this.settingsStore.update(
+                produce((draft) => {
+                  draft.icals[index].email = value.trim();
+                }),
+              );
             }),
-        )
-        .addExtraButton((el) =>
-          el
-            .setIcon("trash")
-            .setTooltip("Delete calendar")
-            .onClick(() => {
-              this.settingsStore.update((previous) => ({
-                ...previous,
-                icals: previous.icals.filter(
-                  (editedIcal, editedIndex) => editedIndex !== index,
-                ),
-              }));
+        );
 
-              this.display();
-            }),
-        ),
-    );
+      new Setting(containerEl).setName("Remote calendar URL").addText((el) =>
+        el
+          .setPlaceholder("URL")
+          .setValue(ical.url)
+          .onChange((value: string) => {
+            const withCorrectProtocol = value.replace("webcal://", "https://");
+
+            this.settingsStore.update(
+              produce((draft) => {
+                draft.icals[index].url = withCorrectProtocol;
+              }),
+            );
+          }),
+      );
+
+      new Setting(containerEl).addButton((el) =>
+        el
+          .setIcon("trash")
+          .setButtonText(`Delete calendar ${index + 1}`)
+          .onClick(() => {
+            this.settingsStore.update((previous) => ({
+              ...previous,
+              icals: previous.icals.filter(
+                (editedIcal, editedIndex) => editedIndex !== index,
+              ),
+            }));
+
+            this.display();
+          }),
+      );
+    });
 
     new Setting(containerEl).addButton((el) =>
       el.setButtonText("Add remote calendar").onClick(() => {
         const newIcal = {
           name: "",
+          email: "",
           url: "",
           color: "#ffffff",
         };
@@ -329,7 +385,19 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Planner Heading Text")
       .setDesc(
-        `When you create a planner, this text is going to be in the heading`,
+        createFragment((fragment) => {
+          fragment.append(
+            createEl("p", {
+              text: "Only the items under this heading (and its subheadings) are going to be pulled from daily notes.",
+            }),
+            createEl("p", {
+              text: "If left empty, the plugin will pull all items from daily notes.",
+            }),
+            createEl("p", {
+              text: `Also used when creating a plan with drag-and-drop.`,
+            }),
+          );
+        }),
       )
       .addText((component) =>
         component
@@ -418,6 +486,19 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Round time to minutes")
+      .setDesc("While editing, tasks are going to get rounded to this number")
+      .addSlider((slider) =>
+        slider
+          .setLimits(5, 20, 5)
+          .setValue(this.plugin.settings().snapStepMinutes)
+          .setDynamicTooltip()
+          .onChange((value: number) => {
+            this.update({ snapStepMinutes: value });
+          }),
+      );
+
+    new Setting(containerEl)
       .setName("Default task duration")
       .setDesc(
         "Used when you create a task with drag-and-drop & when you don't specify an end time",
@@ -432,6 +513,19 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
           }),
       );
 
+    new Setting(containerEl)
+      .setName("Minimal task duration")
+      .setDesc("Used when you create a task with drag-and-drop")
+      .addSlider((slider) =>
+        slider
+          .setLimits(5, 15, 5)
+          .setValue(Number(this.plugin.settings().minimalDurationMinutes))
+          .setDynamicTooltip()
+          .onChange((value: number) => {
+            this.update({ minimalDurationMinutes: value });
+          }),
+      );
+
     containerEl.createEl("h2", { text: "Color blocking" });
     containerEl.createEl("p", {
       text: `Define a background color for a block containing some text (it might be a tag, like '#important'). The first color is for light mode, the second is for dark mode.`,
@@ -441,31 +535,21 @@ export class DayPlannerSettingsTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName(`Color ${index + 1}`)
         .addColorPicker((el) =>
-          // todo: replace with immer
           el.setValue(colorOverride.color).onChange((value: string) => {
-            this.settingsStore.update((previous) => ({
-              ...previous,
-              colorOverrides: previous.colorOverrides.map(
-                (editedOverride, editedIndex) =>
-                  editedIndex === index
-                    ? { ...editedOverride, color: value }
-                    : editedOverride,
-              ),
-            }));
+            this.settingsStore.update(
+              produce((draft) => {
+                draft.colorOverrides[index].color = value;
+              }),
+            );
           }),
         )
         .addColorPicker((el) =>
-          // todo: replace with immer
           el.setValue(colorOverride.darkModeColor).onChange((value: string) => {
-            this.settingsStore.update((previous) => ({
-              ...previous,
-              colorOverrides: previous.colorOverrides.map(
-                (editedOverride, editedIndex) =>
-                  editedIndex === index
-                    ? { ...editedOverride, darkModeColor: value }
-                    : editedOverride,
-              ),
-            }));
+            this.settingsStore.update(
+              produce((draft) => {
+                draft.colorOverrides[index].darkModeColor = value;
+              }),
+            );
           }),
         )
         .addText((el) =>
