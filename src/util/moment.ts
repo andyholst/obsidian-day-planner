@@ -7,16 +7,17 @@ const moment = window.moment;
 
 const defaultTimestampFormat = "hh:mm";
 
-export function getMinutesSinceMidnight(moment: Moment): number {
-  return moment.hours() * 60 + moment.minutes();
+export function getMinutesSinceMidnight(moment: Moment) {
+  return moment.diff(moment.clone().startOf("day"), "minutes");
 }
 
-export function toMinutes(time: string): number {
+export function toMinutes(time: string) {
   const parsed = moment(time, defaultTimestampFormat);
+
   return getMinutesSinceMidnight(parsed);
 }
 
-export function getDiffInMinutes(a: Moment, b: Moment): number {
+export function getDiffInMinutes(a: Moment, b: Moment) {
   return Math.abs(a.diff(b, "minutes"));
 }
 
@@ -38,19 +39,19 @@ export function getMomentFromDayOfWeek(
 export function minutesToMomentOfDay(
   minutesSinceMidnight: number,
   moment: Moment,
-): Moment {
+) {
   return moment.clone().startOf("day").add(minutesSinceMidnight, "minutes");
 }
 
-export function minutesToMoment(minutesSinceMidnight: number): Moment {
+export function minutesToMoment(minutesSinceMidnight: number) {
   return moment().startOf("day").add(minutesSinceMidnight, "minutes");
 }
 
-export function hoursToMoment(hoursSinceMidnight: number): Moment {
+export function hoursToMoment(hoursSinceMidnight: number) {
   return moment().startOf("day").add(hoursSinceMidnight, "hours");
 }
 
-export function addMinutes(moment: Moment, minutes: number): Moment {
+export function addMinutes(moment: Moment, minutes: number) {
   return moment.clone().add(minutes, "minutes");
 }
 
@@ -78,14 +79,12 @@ export function splitMultiday(
   const endOfDayForStart = start.clone().endOf("day");
 
   if (end.isBefore(endOfDayForStart)) {
-    chunks.push([start, end]);
-    return chunks;
+    return [...chunks, [start, end]];
   }
 
-  chunks.push([start, endOfDayForStart]);
-
   const newStart = start.clone().add(1, "day").startOf("day");
-  return splitMultiday(newStart, end, chunks);
+
+  return splitMultiday(newStart, end, [...chunks, [start, endOfDayForStart]]);
 }
 
 export function getEarliestMoment(moments: Moment[]) {
