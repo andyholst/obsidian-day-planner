@@ -3,6 +3,8 @@ import { STask } from "obsidian-dataview";
 import { isNotVoid } from "typed-assert";
 
 import {
+  assertActiveClock,
+  assertNoActiveClock,
   withActiveClock,
   withActiveClockCompleted,
   withoutActiveClock,
@@ -16,11 +18,6 @@ import type { VaultFacade } from "./vault-facade";
 import { WorkspaceFacade } from "./workspace-facade";
 
 export class STaskEditor {
-  constructor(
-    private readonly obsidianFacade: ObsidianFacade,
-    private readonly dataviewFacade: DataviewFacade,
-  ) {}
-
   clockOut = withNotice(async (sTask: STask) => {
     await this.vaultFacade.editFile(sTask.path, (contents) =>
       replaceSTaskInFile(
@@ -30,7 +27,6 @@ export class STaskEditor {
       ),
     );
   });
-
   cancelClock = withNotice(async (sTask: STask) => {
     await this.vaultFacade.editFile(sTask.path, (contents) =>
       replaceSTaskInFile(
@@ -64,24 +60,37 @@ export class STaskEditor {
     );
 
     isNotVoid(sTask, "No task under cursor");
+
     return sTask;
   };
 
-  clockInUnderCursor = withNotice(() => {
-    const sTask = this.getSTaskUnderCursorFromLastView();
-    const updatedMarkdown = toMarkdown(withActiveClock(sTask));
-    this.replaceSTaskUnderCursor(updatedMarkdown);
-  });
+  clockInUnderCursor = withNotice(
+    flow(
+      this.getSTaskUnderCursorFromLastView,
+      assertNoActiveClock,
+      withActiveClock,
+      toMarkdown,
+      this.replaceSTaskUnderCursor,
+    ),
+  );
 
-  clockOutUnderCursor = withNotice(() => {
-    const sTask = this.getSTaskUnderCursorFromLastView();
-    const updatedMarkdown = toMarkdown(withActiveClockCompleted(sTask));
-    this.replaceSTaskUnderCursor(updatedMarkdown);
-  });
+  clockOutUnderCursor = withNotice(
+    flow(
+      this.getSTaskUnderCursorFromLastView,
+      assertActiveClock,
+      withActiveClockCompleted,
+      toMarkdown,
+      this.replaceSTaskUnderCursor,
+    ),
+  );
 
-  cancelClockUnderCursor = withNotice(() => {
-    const sTask = this.getSTaskUnderCursorFromLastView();
-    const updatedMarkdown = toMarkdown(withoutActiveClock(sTask));
-    this.replaceSTaskUnderCursor(updatedMarkdown);
-  });
+  cancelClockUnderCursor = withNotice(
+    flow(
+      this.getSTaskUnderCursorFromLastView,
+      assertActiveClock,
+      withoutActiveClock,
+      toMarkdown,
+      this.replaceSTaskUnderCursor,
+    ),
+  );
 }

@@ -52,8 +52,9 @@ export function createHooks({
   settingsStore,
   onUpdate,
 }: CreateHooksProps) {
-  const dataviewSource = derived(settingsStore, ($settings) => $settings.dataviewSource);
-
+  const dataviewSource = derived(settingsStore, ($settings) => {
+    return $settings.dataviewSource;
+  });
   const layoutReady = readable(false, (set) => {
     app.workspace.onLayoutReady(() => set(true));
   });
@@ -77,14 +78,19 @@ export function createHooks({
   const dataviewLoaded = useDataviewLoaded(app);
 
   const icalRefreshTimer = readable(getUpdateTrigger(), (set) => {
-    const interval = setInterval(() => set(getUpdateTrigger()), icalRefreshIntervalMillis);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      set(getUpdateTrigger());
+    }, icalRefreshIntervalMillis);
+
+    return () => {
+      clearInterval(interval);
+    };
   });
 
   const icalSyncTrigger = writable();
   const combinedIcalSyncTrigger = derived(
     [icalRefreshTimer, icalSyncTrigger],
-    getUpdateTrigger
+    getUpdateTrigger,
   );
 
   const dateRanges = useDateRanges();
@@ -105,13 +111,12 @@ export function createHooks({
   const debouncedTaskUpdateTrigger = useDebounceWithDelay(
     taskUpdateTrigger,
     keyDown,
-    reQueryAfterMillis
+    reQueryAfterMillis,
   );
-
   const visibleDailyNotes = useVisibleDailyNotes(
     layoutReady,
     debouncedTaskUpdateTrigger,
-    visibleDays
+    visibleDays,
   );
 
   const listsFromVisibleDailyNotes = useListsFromVisibleDailyNotes({
@@ -127,7 +132,6 @@ export function createHooks({
     visibleDailyNotes,
     dataviewFacade,
   });
-
   const dataviewTasks = useDataviewTasks({
     listsFromVisibleDailyNotes,
     tasksFromExtraSources,
