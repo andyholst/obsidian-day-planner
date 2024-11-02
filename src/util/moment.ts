@@ -7,17 +7,16 @@ const moment = window.moment;
 
 const defaultTimestampFormat = "hh:mm";
 
-export function getMinutesSinceMidnight(moment: Moment) {
-  return moment.diff(moment.clone().startOf("day"), "minutes");
+export function getMinutesSinceMidnight(moment: Moment): number {
+  return moment.hours() * 60 + moment.minutes();
 }
 
-export function toMinutes(time: string) {
+export function toMinutes(time: string): number {
   const parsed = moment(time, defaultTimestampFormat);
-
   return getMinutesSinceMidnight(parsed);
 }
 
-export function getDiffInMinutes(a: Moment, b: Moment) {
+export function getDiffInMinutes(a: Moment, b: Moment): number {
   return Math.abs(a.diff(b, "minutes"));
 }
 
@@ -39,19 +38,19 @@ export function getMomentFromDayOfWeek(
 export function minutesToMomentOfDay(
   minutesSinceMidnight: number,
   moment: Moment,
-) {
+): Moment {
   return moment.clone().startOf("day").add(minutesSinceMidnight, "minutes");
 }
 
-export function minutesToMoment(minutesSinceMidnight: number) {
+export function minutesToMoment(minutesSinceMidnight: number): Moment {
   return moment().startOf("day").add(minutesSinceMidnight, "minutes");
 }
 
-export function hoursToMoment(hoursSinceMidnight: number) {
+export function hoursToMoment(hoursSinceMidnight: number): Moment {
   return moment().startOf("day").add(hoursSinceMidnight, "hours");
 }
 
-export function addMinutes(moment: Moment, minutes: number) {
+export function addMinutes(moment: Moment, minutes: number): Moment {
   return moment.clone().add(minutes, "minutes");
 }
 
@@ -79,12 +78,14 @@ export function splitMultiday(
   const endOfDayForStart = start.clone().endOf("day");
 
   if (end.isBefore(endOfDayForStart)) {
-    return [...chunks, [start, end]];
+    chunks.push([start, end]);
+    return chunks;
   }
 
-  const newStart = start.clone().add(1, "day").startOf("day");
+  chunks.push([start, endOfDayForStart]);
 
-  return splitMultiday(newStart, end, [...chunks, [start, endOfDayForStart]]);
+  const newStart = start.clone().add(1, "day").startOf("day");
+  return splitMultiday(newStart, end, chunks);
 }
 
 export function getEarliestMoment(moments: Moment[]) {

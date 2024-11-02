@@ -20,8 +20,8 @@ import { type ClockMoments, toTime } from "./clock";
 import { getId } from "./id";
 import { deleteProps } from "./properties";
 
-export function unwrap<T>(group: ReturnType<DataArray<T>["groupBy"]>) {
-  return group.map(({ key, rows }) => [key, rows.array()]).array();
+export function unwrap<T>(group: ReturnType<DataArray<T>["groupBy"]>): [string, T[]][] {
+  return group.map(({ key, rows }) => [key, rows.array()]);
 }
 
 interface Node {
@@ -32,13 +32,14 @@ interface Node {
   scheduled?: DateTime;
 }
 
-export function textToString(node: Node) {
-  const status = node.status ? `[${node.status}] ` : "";
-  return `${node.symbol} ${status}${deleteProps(node.text)}\n`;
+export function textToString(node: Node): string {
+  const statusText = node.status ? `[${node.status}] ` : "";
+  return `${node.symbol} ${statusText}${deleteProps(node.text)}\n`;
 }
 
 export function toString(node: Node, indentation = "") {
   let result = `${indentation}${textToString(node)}`;
+  const childIndentation = `\t${indentation}`;
 
   for (const child of node.children) {
     // todo (minor): handle custom indentation (spaces of differing lengths)
@@ -104,19 +105,16 @@ export function toTask(sTask: STask, day: Moment): TaskWithoutComputedDuration {
   };
 }
 
-export function getScheduledDay(sTask: STask) {
-  const scheduledPropDay: string = sTask.scheduled?.toFormat?.(
-    defaultDayFormatForLuxon,
-  );
-  const dailyNoteDay = getDateFromPath(sTask.path, "day")?.format(
-    defaultDayFormat,
-  );
+export function getScheduledDay(sTask: STask): string | undefined {
+  if (sTask.scheduled?.toFormat) {
+    return sTask.scheduled.toFormat(defaultDayFormatForLuxon);
+  }
 
-  return scheduledPropDay || dailyNoteDay;
+  const dailyNoteDay = getDateFromPath(sTask.path, "day");
+  return dailyNoteDay ? dailyNoteDay.format(defaultDayFormat) : undefined;
 }
 
 export function toClockRecord(sTask: STask, clockMoments: ClockMoments) {
-  // TODO: remove duplication
   return {
     ...toTime(clockMoments),
     startTime: clockMoments[0],
@@ -130,7 +128,7 @@ export function toClockRecord(sTask: STask, clockMoments: ClockMoments) {
   };
 }
 
-export function toMarkdown(sTask: STask) {
+export function toMarkdown(sTask: STask): string {
   const baseIndent = "\t".repeat(sTask.position.start.col);
   const extraIndent = " ".repeat(indentBeforeTaskParagraph);
 
@@ -152,16 +150,8 @@ export function getListTokens(task: TaskTokens) {
   return `${task.symbol} ${maybeCheckbox}`.trim();
 }
 
-export function replaceSTaskInFile(
-  contents: string,
-  sTask: STask,
-  newText: string,
-) {
+export function replaceSTaskInFile(contents: string, sTask: STask, newText: string): string {
   const lines = contents.split("\n");
-  // todo: this is not going to work: it doesn't consider sub-task lines
-  const deleteCount = sTask.position.end.line - sTask.position.start.line + 1;
-
-  lines.splice(sTask.position.start.line, deleteCount, newText);
-
+  lines.splice(sTask.position.start.line, sTask.position.end.line - sTask.position.start.line + 1, newText);
   return lines.join("\n");
 }

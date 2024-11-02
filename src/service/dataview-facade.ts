@@ -13,9 +13,8 @@ export class DataviewFacade {
   };
 
   getTaskFromCaretLocation({ path, line }: { path: string; line: number }) {
-    return this.getTasksFromPath(path).find(
-      (sTask: STask) => sTask.line === line,
-    );
+    const tasks = this.getTasksFromPath(path);
+    return tasks?.find((sTask: STask) => sTask.line === line);
   }
 
   private getTasksFromPath = (path: string): STask[] => {

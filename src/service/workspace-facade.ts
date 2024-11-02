@@ -16,9 +16,7 @@ import { isInstanceOf, isNotVoid } from "typed-assert";
 import type { VaultFacade } from "./vault-facade";
 
 function doesLeafContainFile(leaf: WorkspaceLeaf, file: TFile) {
-  const { view } = leaf;
-
-  return view instanceof FileView && view.file === file;
+  return leaf.view instanceof FileView && leaf.view.file === file;
 }
 
 export class WorkspaceFacade {
@@ -42,31 +40,22 @@ export class WorkspaceFacade {
       const newLeaf = this.workspace.getLeaf(false);
 
       await newLeaf.openFile(file);
-
-      if (newLeaf.view instanceof MarkdownView) {
-        return newLeaf.view.editor;
-      }
+      return this.getEditorFromLeaf(newLeaf);
     }
   }
 
-  getLastCaretLocation = () => {
+  getLastCaretLocation() {
     const view = this.getActiveMarkdownView();
-
     const file = view.file;
 
     isNotVoid(file, "There is no file in view");
 
-    const path = file.path;
-    const line = view.editor.getCursor().line;
-
-    return { path, line };
-  };
+    return { path: file.path, line: view.editor.getCursor().line };
+  }
 
   async openFileForDay(moment: Moment) {
-    const dailyNote =
-      getDailyNote(moment, getAllDailyNotes()) ||
-      (await createDailyNote(moment));
-
+    const allDailyNotes = getAllDailyNotes();
+    const dailyNote = getDailyNote(moment, allDailyNotes) || (await createDailyNote(moment));
     return this.openFileInEditor(dailyNote);
   }
 
@@ -74,7 +63,6 @@ export class WorkspaceFacade {
     const view = this.workspace.getMostRecentLeaf()?.view;
 
     isInstanceOf(view, MarkdownView, "No markdown editor is active");
-
     return view;
   };
 
@@ -92,5 +80,13 @@ export class WorkspaceFacade {
       ?.setEphemeralState({ line });
 
     editor.setCursor({ line, ch: editor.getLine(line).length });
+  }
+
+  private async activateLeaf(leaf: WorkspaceLeaf) {
+    await this.app.workspace.setActiveLeaf(leaf, { focus: true });
+  }
+
+  private getEditorFromLeaf(leaf: WorkspaceLeaf) {
+    return leaf.view instanceof MarkdownView ? leaf.view.editor : null;
   }
 }

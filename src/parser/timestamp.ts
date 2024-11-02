@@ -5,19 +5,18 @@ import { timeRegExp } from "../regexp";
 export function parseTimestamp(asText: string, day: Moment) {
   const result = timeRegExp.exec(asText);
 
-  if (result === null) {
+  if (!result) {
     throw new Error(`${asText} is not a valid timestamp`);
   }
 
-  const [, hours, minutes, ampm] = result;
-
-  let parsedHours = parseInt(hours);
+  let parsedHours = parseInt(result[1]);
 
   if (isNaN(parsedHours)) {
     throw new Error(`${asText} is not a valid timestamp`);
   }
 
-  const parsedMinutes = parseInt(minutes) || 0;
+  const parsedMinutes = parseInt(result[2]) || 0;
+  const ampm = result[3]?.toLowerCase();
 
   if (ampm?.toLowerCase().trim() === "pm" && parsedHours < 12) {
     parsedHours += 12;
@@ -32,5 +31,5 @@ export function parseTimestamp(asText: string, day: Moment) {
     minutes: parsedMinutes,
   });
 
-  return day.clone().startOf("day").add(timeOfDay);
+  return day?.clone().startOf("day").add(timeOfDay) || null;
 }

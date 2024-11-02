@@ -13,7 +13,6 @@ import { EditMode } from "./types";
 
 export interface UseEditHandlersProps {
   startEdit: (operation: EditOperation) => void;
-  // todo: make dynamic, since it can change?
   day: Moment;
   workspaceFacade: WorkspaceFacade;
   cursorMinutes: Readable<number>;
@@ -29,6 +28,7 @@ export function createEditHandlers({
   editOperation,
   settings,
 }: UseEditHandlersProps) {
+
   function handleContainerMouseDown() {
     const newTask = createTask({
       day,
@@ -75,13 +75,7 @@ export function createEditHandlers({
   }
 
   function handleMouseEnter() {
-    editOperation.update(
-      (previous) =>
-        previous && {
-          ...previous,
-          day,
-        },
-    );
+    editOperation.update((previous) => previous && { ...previous, day });
   }
 
   return {
