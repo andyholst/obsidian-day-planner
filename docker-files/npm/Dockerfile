@@ -1,5 +1,8 @@
 FROM node:16-alpine
 
+ARG REPO_NAME
+ENV REPO_NAME=${REPO_NAME}
+
 RUN apk add --no-cache \
     git \
     openssh-client \
@@ -10,7 +13,6 @@ RUN npm install -g npm@9.9.3
 RUN npm install -g husky@9.1.5
 
 COPY docker-files/npm/setup.sh /tmp/setup.sh
-
 RUN sed -i 's/\r$//' /tmp/setup.sh && chmod +x /tmp/setup.sh
 
 WORKDIR /app
@@ -18,8 +20,5 @@ WORKDIR /app
 COPY docker-files/npm/cmd.sh /usr/local/bin/cmd.sh
 RUN sed -i 's/\r$//' /usr/local/bin/cmd.sh && chmod +x /usr/local/bin/cmd.sh
 
-ENV REPO_NAME=${REPO_NAME}
-
 ENTRYPOINT ["/tmp/setup.sh"]
-
 CMD ["/usr/local/bin/cmd.sh"]
