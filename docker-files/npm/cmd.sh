@@ -11,7 +11,7 @@ TAG=$(git describe --abbrev=0 --tags 2>/dev/null || echo 'untagged')
 
 echo "Using tag: $TAG"
 
-npm run build
+npm run build --no-package-lock --loglevel=silly
 
 mkdir -p "${REPO_NAME}"
 
