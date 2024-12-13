@@ -1,5 +1,5 @@
 import { flow } from "lodash/fp";
-import { STask } from "obsidian-dataview";
+import type { STask } from "obsidian-dataview";
 import { isNotVoid } from "typed-assert";
 
 import {
@@ -9,7 +9,7 @@ import {
   withActiveClockCompleted,
   withoutActiveClock,
 } from "../util/clock";
-import { replaceSTaskInFile, toMarkdown } from "../util/dataview";
+import * as dv from "../util/dataview";
 import { locToEditorPosition } from "../util/editor";
 import { withNotice } from "../util/with-notice";
 
@@ -18,24 +18,24 @@ import type { VaultFacade } from "./vault-facade";
 import { WorkspaceFacade } from "./workspace-facade";
 
 export class STaskEditor {
-  clockOut = withNotice(async (sTask: STask) => {
-    await this.vaultFacade.editFile(sTask.path, (contents) =>
-      replaceSTaskInFile(
-        contents,
-        sTask,
-        toMarkdown(withActiveClockCompleted(sTask)),
-      ),
-    );
-  });
-  cancelClock = withNotice(async (sTask: STask) => {
-    await this.vaultFacade.editFile(sTask.path, (contents) =>
-      replaceSTaskInFile(
-        contents,
-        sTask,
-        toMarkdown(withoutActiveClock(sTask)),
-      ),
-    );
-  });
+  edit = withNotice(
+    async (props: {
+      path: string;
+      line: number;
+      editFn: (sTask: STask) => STask;
+    }) => {
+      const { path, line, editFn } = props;
+      const sTask = this.dataviewFacade.getTaskAtLine({ path, line });
+
+      isNotVoid(sTask, `No task found: ${path}:${line}`);
+
+      const newSTaskMarkdown = dv.textToMarkdownWithIndentation(editFn(sTask));
+
+      await this.vaultFacade.editFile(sTask.path, (contents) =>
+        dv.replaceSTaskText(contents, sTask, newSTaskMarkdown),
+      );
+    },
+  );
 
   constructor(
     private readonly workspaceFacade: WorkspaceFacade,
@@ -47,15 +47,19 @@ export class STaskEditor {
     const view = this.workspaceFacade.getActiveMarkdownView();
     const sTask = this.getSTaskUnderCursorFromLastView();
 
+    // Note: we re-calculate indentation when transforming sTasks to markdown, so we
+    //  don't need the original indentation
+    const replacementStart = { ...sTask.position.start, col: 0 };
+
     view.editor.replaceRange(
       newMarkdown,
-      locToEditorPosition(sTask.position.start),
+      locToEditorPosition(replacementStart),
       locToEditorPosition(sTask.position.end),
     );
   };
 
   private getSTaskUnderCursorFromLastView = () => {
-    const sTask = this.dataviewFacade.getTaskFromCaretLocation(
+    const sTask = this.dataviewFacade.getTaskAtLine(
       this.workspaceFacade.getLastCaretLocation(),
     );
 
@@ -64,12 +68,13 @@ export class STaskEditor {
     return sTask;
   };
 
+  // todo: remove duplication
   clockInUnderCursor = withNotice(
     flow(
       this.getSTaskUnderCursorFromLastView,
       assertNoActiveClock,
       withActiveClock,
-      toMarkdown,
+      dv.textToMarkdownWithIndentation,
       this.replaceSTaskUnderCursor,
     ),
   );
@@ -79,7 +84,7 @@ export class STaskEditor {
       this.getSTaskUnderCursorFromLastView,
       assertActiveClock,
       withActiveClockCompleted,
-      toMarkdown,
+      dv.textToMarkdownWithIndentation,
       this.replaceSTaskUnderCursor,
     ),
   );
@@ -89,7 +94,7 @@ export class STaskEditor {
       this.getSTaskUnderCursorFromLastView,
       assertActiveClock,
       withoutActiveClock,
-      toMarkdown,
+      dv.textToMarkdownWithIndentation,
       this.replaceSTaskUnderCursor,
     ),
   );

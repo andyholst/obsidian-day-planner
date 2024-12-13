@@ -1,6 +1,6 @@
 import { flow, uniqBy } from "lodash/fp";
 import type { Moment } from "moment";
-import { derived, type Readable, writable } from "svelte/store";
+import { derived, type Readable, type Writable, writable } from "svelte/store";
 
 import { addHorizontalPlacing } from "../../../overlap/overlap";
 import { WorkspaceFacade } from "../../../service/workspace-facade";
@@ -13,14 +13,18 @@ import type {
 } from "../../../task-types";
 import type { OnUpdateFn } from "../../../types";
 import * as m from "../../../util/moment";
-import { getEndTime, getRenderKey, isWithTime } from "../../../util/task-utils";
-import { getDayKey, getEmptyRecordsForDay } from "../../../util/tasks-utils";
+import {
+  getDayKey,
+  getEmptyTasksForDay,
+  getEndTime,
+  getRenderKey,
+  isWithTime,
+} from "../../../util/task-utils";
 
 import { createEditHandlers } from "./create-edit-handlers";
 import { useCursor } from "./cursor";
 import { transform } from "./transform/transform";
 import type { EditOperation } from "./types";
-import { useCursorMinutes } from "./use-cursor-minutes";
 import { useEditActions } from "./use-edit-actions";
 
 function groupByDay(tasks: Task[]) {
@@ -47,28 +51,49 @@ export function useEditContext(props: {
   settings: Readable<DayPlannerSettings>;
   localTasks: Readable<LocalTask[]>;
   remoteTasks: Readable<Task[]>;
+  pointerDateTime: Writable<{ dateTime?: Moment; type?: "dateTime" | "date" }>;
 }) {
-  const { workspaceFacade, onUpdate, settings, localTasks, remoteTasks } =
-    props;
+  const {
+    workspaceFacade,
+    onUpdate,
+    settings,
+    localTasks,
+    remoteTasks,
+    pointerDateTime,
+  } = props;
 
   const editOperation = writable<EditOperation | undefined>();
   const cursor = useCursor(editOperation);
-  const pointerOffsetY = writable(0);
-  const cursorMinutes = useCursorMinutes(pointerOffsetY, settings);
 
   const baselineTasks = writable<LocalTask[]>([], (set) => {
     return localTasks.subscribe(set);
   });
 
   const tasksWithPendingUpdate = derived(
-    [editOperation, cursorMinutes, baselineTasks, settings],
-    ([$editOperation, $cursorMinutes, $baselineTasks, $settings]) => {
+    [editOperation, baselineTasks, settings, pointerDateTime],
+    ([$editOperation, $baselineTasks, $settings, $pointerDateTime]) => {
       return $editOperation
-        ? transform($baselineTasks, $cursorMinutes, $editOperation, $settings)
+        ? transform($baselineTasks, $editOperation, $settings, $pointerDateTime)
         : $baselineTasks;
     },
   );
 
+  const { startEdit, confirmEdit, cancelEdit } = useEditActions({
+    editOperation,
+    baselineTasks,
+    tasksWithPendingUpdate,
+    onUpdate,
+  });
+
+  const handlers = createEditHandlers({
+    pointerDateTime,
+    workspaceFacade,
+    startEdit,
+    editOperation,
+    settings,
+  });
+
+  // todo: move this grouping out of the hook, they're not related
   const dayToDisplayedTasks = derived(
     [remoteTasks, tasksWithPendingUpdate],
     ([$remoteTasks, $tasksWithPendingUpdate]) => {
@@ -92,54 +117,30 @@ export function useEditContext(props: {
     },
   );
 
-  const { startEdit, confirmEdit, cancelEdit } = useEditActions({
-    editOperation,
-    baselineTasks,
-    tasksWithPendingUpdate,
-    onUpdate,
-  });
+  function getDisplayedTasksForTimeline(day: Moment) {
+    return derived(dayToDisplayedTasks, ($dayToDisplayedTasks) => {
+      const tasksForDay =
+        $dayToDisplayedTasks[getDayKey(day)] || getEmptyTasksForDay();
 
-  function getEditHandlers(day: Moment) {
-    const handlers = createEditHandlers({
-      day,
-      workspaceFacade,
-      startEdit,
-      cursorMinutes,
-      editOperation,
-      settings,
+      const withTime: Array<WithPlacing<WithTime<Task>>> = flow(
+        uniqBy(getRenderKey),
+        addHorizontalPlacing,
+      )(tasksForDay.withTime);
+
+      return {
+        ...tasksForDay,
+        withTime,
+      };
     });
-
-    const displayedTasksForDay = derived(
-      dayToDisplayedTasks,
-      ($dayToDisplayedTasks) => {
-        const tasksForDay =
-          $dayToDisplayedTasks[getDayKey(day)] || getEmptyRecordsForDay();
-
-        const withTime: Array<WithPlacing<WithTime<Task>>> = flow(
-          uniqBy(getRenderKey),
-          addHorizontalPlacing,
-        )(tasksForDay.withTime);
-
-        return {
-          ...tasksForDay,
-          withTime,
-        };
-      },
-    );
-
-    return {
-      ...handlers,
-      displayedTasksForDay,
-    };
   }
 
   return {
+    handlers,
     cursor,
-    pointerOffsetY,
     dayToDisplayedTasks,
     confirmEdit,
     cancelEdit,
-    getEditHandlers,
     editOperation,
+    getDisplayedTasksForTimeline,
   };
 }

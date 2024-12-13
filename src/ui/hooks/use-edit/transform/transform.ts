@@ -1,4 +1,4 @@
-import { produce } from "immer";
+import type { Moment } from "moment";
 import { isNotVoid } from "typed-assert";
 
 import type { DayPlannerSettings } from "../../../../settings";
@@ -35,6 +35,7 @@ const transformers: Record<EditMode, TaskTransformer> = {
   [EditMode.RESIZE_FROM_TOP_AND_SHIFT_OTHERS]: resizeFromTopAndShiftOthers,
   [EditMode.RESIZE_AND_SHRINK_OTHERS]: resizeAndShrinkOthers,
   [EditMode.RESIZE_FROM_TOP_AND_SHRINK_OTHERS]: resizeFromTopAndShrinkOthers,
+  [EditMode.SCHEDULE_SEARCH_RESULT]: drag,
 };
 
 function isSingleDayMode(mode: EditMode) {
@@ -49,53 +50,64 @@ function isSingleDayMode(mode: EditMode) {
 }
 
 function sortByStartMinutes(tasks: WithTime<LocalTask>[]) {
-  return produce(tasks, (draft) =>
-    draft.sort((a, b) => a.startTime.diff(b.startTime)),
-  );
+  return tasks.slice().sort((a, b) => a.startTime.diff(b.startTime));
 }
 
 export function transform(
   baseline: LocalTask[],
-  cursorMinutes: number,
   operation: EditOperation,
   settings: DayPlannerSettings,
+  pointerDateTime: { dateTime?: Moment; type?: "dateTime" | "date" },
 ) {
+  const dateTime = pointerDateTime.dateTime;
+
+  if (!dateTime) {
+    throw new Error("DateTime must be defined on edit");
+  }
+
   const transformFn = transformers[operation.mode];
 
   isNotVoid(transformFn, `No transformer for operation: ${operation.mode}`);
 
-  // todo: duplicated, task gets updated in transformer, in onMouseEnter, and here
+  // todo: duplicated, task gets updated in transformer and here
   const index = baseline.findIndex((task) => task.id === operation.task.id);
-  const isInBaseline = index >= 0;
+  const isTaskInBaseline = index >= 0;
 
-  let taskWithUpdatedDay = operation.task;
-  let withUpdatedDay = baseline.concat(operation.task);
+  let updatedTasks: LocalTask[];
 
-  if (isInBaseline) {
+  if (isTaskInBaseline) {
     const found = baseline[index];
-    taskWithUpdatedDay = found;
+    let taskWithCorrectDay = found;
 
     if (!isSingleDayMode(operation.mode)) {
-      taskWithUpdatedDay = {
+      taskWithCorrectDay = {
         ...found,
         startTime: minutesToMomentOfDay(
           getMinutesSinceMidnight(found.startTime),
-          operation.day,
+          dateTime,
         ),
       };
     }
 
-    withUpdatedDay = toSpliced(baseline, index, taskWithUpdatedDay);
+    updatedTasks = toSpliced(baseline, index, taskWithCorrectDay);
+  } else {
+    updatedTasks = baseline.concat({
+      ...operation.task,
+      startTime: minutesToMomentOfDay(
+        getMinutesSinceMidnight(operation.task.startTime),
+        dateTime,
+      ),
+    });
   }
 
-  const withTimeSorted = sortByStartMinutes(withUpdatedDay);
+  const withTimeSorted = sortByStartMinutes(updatedTasks);
 
   // todo: cursor time should be a moment
   return transformFn(
     withTimeSorted,
     operation.task,
-    cursorMinutes,
+    getMinutesSinceMidnight(dateTime),
     settings,
-    operation.day,
+    dateTime,
   );
 }

@@ -3,30 +3,36 @@
     Settings,
     ChevronLeft,
     ChevronRight,
-    AlertTriangle,
     EllipsisVertical,
   } from "lucide-svelte";
-  import type { Moment } from "moment";
   import { Menu } from "obsidian";
-  import { getContext } from "svelte";
-  import type { Writable } from "svelte/store";
+  import { slide } from "svelte/transition";
 
-  import { dateRangeContextKey, obsidianContext } from "../../constants";
+  import { dataviewDownloadLink } from "../../constants";
+  import { getDateRangeContext } from "../../context/date-range-context";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import { isToday } from "../../global-store/current-time";
   import { settings } from "../../global-store/settings";
-  import type { ObsidianContext } from "../../types";
   import { createDailyNoteIfNeeded } from "../../util/daily-notes";
 
+  import ActiveClocks from "./active-clocks.svelte";
+  import Callout from "./callout.svelte";
   import ControlButton from "./control-button.svelte";
-  import ErrorReport from "./error-report.svelte";
+  import { createSlide } from "./defaults";
+  import Tree from "./obsidian/tree.svelte";
   import Pill from "./pill.svelte";
   import SettingsControls from "./settings-controls.svelte";
 
-  const { workspaceFacade, initWeeklyView, dataviewLoaded, reSync } =
-    getContext<ObsidianContext>(obsidianContext);
-  const dateRange = getContext<Writable<Moment[]>>(dateRangeContextKey);
+  const {
+    workspaceFacade,
+    initWeeklyView,
+    dataviewLoaded,
+    reSync,
+    tasksWithActiveClockProps,
+  } = getObsidianContext();
+  const dateRange = getDateRangeContext();
 
-  let settingsVisible = false;
+  let settingsVisible = $state(false);
 
   function toggleSettings() {
     settingsVisible = !settingsVisible;
@@ -79,7 +85,6 @@
 </script>
 
 <div class="controls">
-  <ErrorReport />
   <div class="header">
     <ControlButton onclick={handleReSyncClick}>
       <EllipsisVertical class="svg-icon" />
@@ -115,7 +120,7 @@
       <Settings class="svg-icon" />
     </ControlButton>
   </div>
-  <div>
+  <div class="pill-wrapper">
     <Pill
       key="filter"
       onpointerup={() => {
@@ -126,19 +131,34 @@
   </div>
 
   {#if !$dataviewLoaded}
-    <div class="info-container">
-      <AlertTriangle class="svg-icon mod-error" />
-      <span
-        >You need to install and enable
-        <a href="https://github.com/blacksmithgu/obsidian-dataview">Dataview</a>
-        for the day planner to work.</span
-      >
-    </div>
+    <Callout --callout-margin-inline="var(--size-4-3)" type="error">
+      <span>
+        You need to install and enable
+        <a href={dataviewDownloadLink}>Dataview</a>
+      </span>
+    </Callout>
   {/if}
 
   {#if settingsVisible}
-    <SettingsControls />
+    <div transition:slide={createSlide({ axis: "y" })}>
+      <SettingsControls />
+    </div>
   {/if}
+
+  <Tree
+    flair={String($tasksWithActiveClockProps.length)}
+    isInitiallyOpen
+    title="Active clocks"
+  >
+    <ActiveClocks --search-results-bg-color="var(--background-primary)" />
+  </Tree>
+
+  <!--  <Tree title="Search">-->
+  <!--    <Search-->
+  <!--      &#45;&#45;search-max-height="35vh"-->
+  <!--      &#45;&#45;search-results-bg-color="var(&#45;&#45;background-primary)"-->
+  <!--    />-->
+  <!--  </Tree>-->
 </div>
 
 <style>
@@ -159,14 +179,19 @@
     color: var(--text-error);
   }
 
-  .info-container {
-    display: flex;
-    gap: var(--size-4-1);
-    margin: var(--size-4-2);
+  .pill-wrapper {
+    padding-bottom: var(--size-4-2);
   }
 
-  .info-container :global(.svg-icon) {
-    flex-shrink: 0;
+  .pill-wrapper,
+  .header {
+    padding-inline: var(--size-4-3);
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    padding-block: var(--size-4-2);
   }
 
   .date {
@@ -184,16 +209,8 @@
     display: flex;
     flex: 0 0 auto;
     flex-direction: column;
-    gap: var(--size-4-1);
-
-    padding: var(--size-4-2);
 
     font-size: var(--font-ui-small);
-  }
-
-  .header {
-    display: flex;
-    justify-content: space-between;
   }
 
   .day-controls {

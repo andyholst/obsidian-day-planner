@@ -17,31 +17,24 @@ import { baseTask } from "./util/test-utils";
 
 describe("moving tasks between containers", () => {
   test("with no edit operation in progress, nothing happens on mouse move", () => {
-    const { todayControls, moveCursorTo, dayToDisplayedTasks } = setUp({
+    const { moveCursorTo, dayToDisplayedTasks } = setUp({
       tasks: baseTasks,
     });
 
     const initial = get(dayToDisplayedTasks);
 
-    todayControls.handleMouseEnter();
-    moveCursorTo("01:00");
+    moveCursorTo(moment("2023-01-01 01:00"));
 
     expect(get(dayToDisplayedTasks)).toEqual(initial);
   });
 
   test("scheduling works between days", () => {
-    const {
-      todayControls,
-      nextDayControls,
-      moveCursorTo,
-      dayToDisplayedTasks,
-    } = setUp({
+    const { handlers, moveCursorTo, dayToDisplayedTasks } = setUp({
       tasks: tasksWithUnscheduledTask,
     });
 
-    todayControls.handleGripMouseDown(baseTask, EditMode.DRAG);
-    nextDayControls.handleMouseEnter();
-    moveCursorTo("01:00");
+    handlers.handleGripMouseDown(baseTask, EditMode.DRAG);
+    moveCursorTo(moment("2023-01-02 01:00"));
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [nextDayKey]: {
@@ -51,12 +44,7 @@ describe("moving tasks between containers", () => {
   });
 
   test("drag works between days", () => {
-    const {
-      todayControls,
-      nextDayControls,
-      moveCursorTo,
-      dayToDisplayedTasks,
-    } = setUp({
+    const { handlers, moveCursorTo, dayToDisplayedTasks } = setUp({
       tasks: [
         baseTask,
         { ...baseTask, id: "2", startTime: moment("2023-01-01 01:00") },
@@ -64,9 +52,8 @@ describe("moving tasks between containers", () => {
       ],
     });
 
-    todayControls.handleGripMouseDown(baseTask, EditMode.DRAG);
-    nextDayControls.handleMouseEnter();
-    moveCursorTo("01:00");
+    handlers.handleGripMouseDown(baseTask, EditMode.DRAG);
+    moveCursorTo(moment("2023-01-02 01:00"));
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [dayKey]: {
@@ -82,12 +69,7 @@ describe("moving tasks between containers", () => {
   });
 
   test("drag many works between days", () => {
-    const {
-      todayControls,
-      nextDayControls,
-      moveCursorTo,
-      dayToDisplayedTasks,
-    } = setUp({
+    const { handlers, moveCursorTo, dayToDisplayedTasks } = setUp({
       tasks: [
         baseTask,
         { ...baseTask, id: "2", startTime: moment("2023-01-01 01:00") },
@@ -96,9 +78,8 @@ describe("moving tasks between containers", () => {
       settings: defaultSettingsForTests,
     });
 
-    todayControls.handleGripMouseDown(baseTask, EditMode.DRAG_AND_SHIFT_OTHERS);
-    nextDayControls.handleMouseEnter();
-    moveCursorTo("02:00");
+    handlers.handleGripMouseDown(baseTask, EditMode.DRAG_AND_SHIFT_OTHERS);
+    moveCursorTo(moment("2023-01-02 02:00"));
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [dayKey]: {
@@ -114,19 +95,13 @@ describe("moving tasks between containers", () => {
   });
 
   test.skip("create works between days", () => {
-    const {
-      todayControls,
-      moveCursorTo,
-      nextDayControls,
-      dayToDisplayedTasks,
-    } = setUp({
+    const { handlers, moveCursorTo, dayToDisplayedTasks } = setUp({
       tasks: emptyTasks,
     });
 
-    moveCursorTo("01:00");
-    todayControls.handleContainerMouseDown();
-    nextDayControls.handleMouseEnter();
-    moveCursorTo("02:00");
+    moveCursorTo(moment("2023-01-01 01:00"));
+    handlers.handleContainerMouseDown();
+    moveCursorTo(moment("2023-01-02 02:00"));
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [nextDayKey]: {
@@ -139,10 +114,9 @@ describe("moving tasks between containers", () => {
 
   // todo: fix
   test("resize doesn't works between days", () => {
-    const { todayControls, nextDayControls, dayToDisplayedTasks } = setUp();
+    const { handlers, dayToDisplayedTasks } = setUp();
 
-    todayControls.handleResizerMouseDown(baseTask, EditMode.RESIZE);
-    nextDayControls.handleMouseEnter();
+    handlers.handleResizerMouseDown(baseTask, EditMode.RESIZE);
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [dayKey]: {

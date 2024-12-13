@@ -105,11 +105,11 @@
   background-color: transparent;
 }
 
-[data-type="timeline"] .view-content,
-[data-type="weekly"] .view-content,
-[data-type="timeTracker"] .view-content {
+[data-type="planner-timeline"] .view-content,
+[data-type="planner-weekly"] .view-content {
   --time-ruler-width: 30px;
   --scrollbar-width: 12px;
+  --timeline-flex-basis: 200px;
 
   --shadow-color: #00000010;
   --shadow-right: 2px 0px 2px var(--shadow-color);
@@ -120,7 +120,7 @@
   padding: 0;
 }
 
-[data-type="weekly"] {
+[data-type="planner-weekly"] {
   .view-header {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

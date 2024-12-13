@@ -1,5 +1,7 @@
 import { isNotVoid } from "typed-assert";
 
+import { repeatingNewlinesRegExp } from "../regexp";
+
 export function isTouchEvent(event: PointerEvent) {
   return ["pen", "touch"].includes(event.pointerType);
 }
@@ -36,26 +38,16 @@ export function isTapOutside(
   );
 }
 
-export function cancelFadeTransition(el: HTMLElement) {
-  Object.assign(el.style, {
-    transition: "none",
-    opacity: 1,
-  });
-}
-
-export function addFadeTransition(el: HTMLElement) {
-  Object.assign(el.style, {
-    transition: "opacity 200ms",
-    opacity: 0,
-  });
-}
-
 export function toggleCheckbox(line: string) {
   if (line.includes("[ ]")) {
     return line.replace("[ ]", "[x]");
   }
 
   return line.replace("[x]", "[ ]");
+}
+
+export function createHeading(level: number, text: string) {
+  return `${"#".repeat(level)} ${text}`;
 }
 
 export function updateLine(
@@ -76,10 +68,14 @@ export function updateLine(
   return lines.join("\n");
 }
 
-export function deleteLines(contents: string, from: number, count: number) {
-  const lines = contents.split("\n");
+export function normalizeNewlines(text: string) {
+  return text.replaceAll(repeatingNewlinesRegExp, "\n");
+}
 
-  lines.splice(from, count);
+export function indentLines(lines: string[], indentation: string) {
+  return lines.map((line) => `${indentation}${line}`);
+}
 
-  return lines.join("\n");
+export function indent(text: string, indentation: string) {
+  return indentLines(text.split("\n"), indentation).join("\n");
 }

@@ -34,19 +34,23 @@ export function toTime([start, end]: ClockMoments): Time {
   };
 }
 
+export function hasClockProp(sTask: STask) {
+  return Object.hasOwn(sTask, clockKey);
+}
+
 export function hasActiveClockProp(sTask: STask) {
-  if (!sTask.clocked) {
+  if (!hasClockProp(sTask)) {
     return false;
   }
 
-  if (Array.isArray(sTask.clocked)) {
-    return sTask.clocked.some(isActiveClockProp);
+  if (Array.isArray(sTask[clockKey])) {
+    return sTask[clockKey].some(isActiveClockPropValue);
   }
 
-  return isActiveClockProp(sTask.clocked);
+  return isActiveClockPropValue(sTask[clockKey]);
 }
 
-function isActiveClockProp(clockPropValue: unknown) {
+export function isActiveClockPropValue(clockPropValue: unknown) {
   return !String(clockPropValue).includes(clockSeparator);
 }
 
@@ -91,12 +95,12 @@ export function lines(fn: (lines: string[]) => string[], text: string) {
   return fn(text.split("\n")).join("\n");
 }
 
-export function withActiveClockCompleted(sTask: STask) {
+export function withActiveClockCompleted(task: { text: string }) {
   return {
-    ...sTask,
+    ...task,
     text: lines(
       map((line) => (containsActiveClock(line) ? clockOut(line) : line)),
-      sTask.text,
+      task.text,
     ),
   };
 }

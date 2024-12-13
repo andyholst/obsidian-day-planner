@@ -1,5 +1,6 @@
 import { noop } from "lodash/fp";
 import type { Moment } from "moment/moment";
+import moment from "moment/moment";
 import { writable } from "svelte/store";
 import { vi } from "vitest";
 
@@ -10,9 +11,8 @@ import {
 } from "../../../src/settings";
 import type { LocalTask } from "../../../src/task-types";
 import { useEditContext } from "../../../src/ui/hooks/use-edit/use-edit-context";
-import { toMinutes } from "../../../src/util/moment";
 
-import { baseTasks, day, nextDay } from "./fixtures";
+import { baseTasks } from "./fixtures";
 
 function createProps({
   tasks,
@@ -30,6 +30,7 @@ function createProps({
     workspaceFacade,
     localTasks: writable(tasks),
     remoteTasks: writable([]),
+    pointerDateTime: writable({ dateTime: moment("2023-01-01 00:00") }),
   };
 }
 
@@ -38,22 +39,19 @@ export function setUp({
   settings = defaultSettingsForTests,
 } = {}) {
   const props = createProps({ tasks, settings });
-  const { getEditHandlers, dayToDisplayedTasks, confirmEdit, pointerOffsetY } =
-    useEditContext(props);
-
-  const todayControls = getEditHandlers(day);
-  const nextDayControls = getEditHandlers(nextDay);
+  const { handlers, dayToDisplayedTasks, confirmEdit } = useEditContext(props);
 
   // this prevents the store from resetting;
   dayToDisplayedTasks.subscribe(noop);
 
-  function moveCursorTo(time: string, day?: Moment) {
-    pointerOffsetY.set(toMinutes(time));
+  function moveCursorTo(dateTime: Moment) {
+    props.pointerDateTime.set({
+      dateTime,
+    });
   }
 
   return {
-    todayControls,
-    nextDayControls,
+    handlers,
     moveCursorTo,
     dayToDisplayedTasks,
     confirmEdit,

@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { getContext, type Snippet } from "svelte";
+  import { type Snippet } from "svelte";
 
-  import { obsidianContext } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import type { Task } from "../../task-types";
-  import type { ObsidianContext } from "../../types";
   import { tappable } from "../actions/tappable";
   import type { ActionArray } from "../actions/use-actions";
   import { useActions } from "../actions/use-actions";
@@ -16,14 +15,13 @@
     use = [],
   }: { children: Snippet; task: Task; use?: ActionArray } = $props();
 
-  const { isDarkMode, settingsSignal } =
-    getContext<ObsidianContext>(obsidianContext);
+  const { isDarkMode, settingsSignal } = getObsidianContext();
 
   const {
     properContrastColors: { normal, muted, faint },
     backgroundColor,
     borderColor,
-  } = useColor({ task });
+  } = $derived(useColor({ task }));
 </script>
 
 <div class="padding">
@@ -39,6 +37,7 @@
       settingsSignal.current,
     )}
     class="content"
+    class:truncated-bottom={task.truncated === "bottom"}
     on:longpress
     on:pointerenter
     on:pointerleave
@@ -61,7 +60,7 @@
 
     width: var(--time-block-width, 100%);
     height: var(--time-block-height, auto);
-    padding: 0 1px 2px;
+    padding: var(--time-block-padding, 0 1px 2px);
 
     transition: 0.05s linear;
   }
@@ -79,5 +78,11 @@
     border: 1px solid var(--time-block-border-color, var(--color-base-50));
     border-radius: var(--radius-s);
     box-shadow: 1px 1px 2px 0 #0000001f;
+  }
+
+  .truncated-bottom {
+    border-bottom-style: dashed;
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
   }
 </style>

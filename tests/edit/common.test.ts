@@ -10,23 +10,16 @@ import { baseTask, threeTasks } from "./util/test-utils";
 
 describe("drag one & common edit mechanics", () => {
   test("after edit confirmation, tasks freeze and stop reacting to cursor", async () => {
-    const {
-      todayControls,
-      nextDayControls,
-      moveCursorTo,
-      dayToDisplayedTasks,
-      confirmEdit,
-    } = setUp({
+    const { handlers, moveCursorTo, dayToDisplayedTasks, confirmEdit } = setUp({
       tasks: threeTasks,
     });
 
-    todayControls.handleGripMouseDown(threeTasks[1], EditMode.DRAG);
-    moveCursorTo("03:00");
+    handlers.handleGripMouseDown(threeTasks[1], EditMode.DRAG);
+    moveCursorTo(moment("2023-01-01 03:00"));
 
     await confirmEdit();
 
-    nextDayControls.handleMouseEnter();
-    moveCursorTo("05:00");
+    moveCursorTo(moment("2023-01-02 05:00"));
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [dayKey]: {
@@ -40,9 +33,9 @@ describe("drag one & common edit mechanics", () => {
   });
 
   test.skip("when a task is set to its current time, nothing happens", async () => {
-    const { todayControls, confirmEdit, props } = setUp();
+    const { handlers, confirmEdit, props } = setUp();
 
-    todayControls.handleGripMouseDown(baseTask, EditMode.DRAG);
+    handlers.handleGripMouseDown(baseTask, EditMode.DRAG);
     await confirmEdit();
 
     expect(props.onUpdate).not.toHaveBeenCalled();
@@ -92,7 +85,7 @@ describe("drag one & common edit mechanics", () => {
       };
       const {
         dayToDisplayedTasks,
-        todayControls,
+        handlers,
         moveCursorTo,
         confirmEdit,
         props,
@@ -100,8 +93,8 @@ describe("drag one & common edit mechanics", () => {
         tasks: [task],
       });
 
-      todayControls.handleGripMouseDown(task, EditMode.DRAG);
-      moveCursorTo("23:00");
+      handlers.handleGripMouseDown(task, EditMode.DRAG);
+      moveCursorTo(moment("2023-01-01 23:00"));
 
       expect(get(dayToDisplayedTasks)).toMatchObject({
         [dayKey]: {
@@ -127,13 +120,17 @@ describe("drag one & common edit mechanics", () => {
 
       await confirmEdit();
 
-      expect(props.onUpdate).toHaveBeenCalledWith(expect.anything(), [
-        expect.objectContaining({
-          id: "1",
-          startTime: moment("2023-01-01 23:00"),
-          durationMinutes: 120,
-        }),
-      ]);
+      expect(props.onUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        [
+          expect.objectContaining({
+            id: "1",
+            startTime: moment("2023-01-01 23:00"),
+            durationMinutes: 120,
+          }),
+        ],
+        expect.anything(),
+      );
     });
 
     test("Editing the first task of a split works", async () => {
@@ -144,22 +141,26 @@ describe("drag one & common edit mechanics", () => {
         id: "1",
       };
 
-      const { todayControls, moveCursorTo, confirmEdit, props } = setUp({
+      const { handlers, moveCursorTo, confirmEdit, props } = setUp({
         tasks: [task],
       });
 
-      todayControls.handleGripMouseDown(task, EditMode.DRAG);
-      moveCursorTo("23:30");
+      handlers.handleGripMouseDown(task, EditMode.DRAG);
+      moveCursorTo(moment("2023-01-01 23:30"));
 
       await confirmEdit();
 
-      expect(props.onUpdate).toHaveBeenCalledWith(expect.anything(), [
-        expect.objectContaining({
-          id: "1",
-          startTime: moment("2023-01-01 23:30"),
-          durationMinutes: 180,
-        }),
-      ]);
+      expect(props.onUpdate).toHaveBeenCalledWith(
+        expect.anything(),
+        [
+          expect.objectContaining({
+            id: "1",
+            startTime: moment("2023-01-01 23:30"),
+            durationMinutes: 180,
+          }),
+        ],
+        expect.anything(),
+      );
     });
 
     test("Editing the second task of a split works", async () => {
@@ -170,12 +171,12 @@ describe("drag one & common edit mechanics", () => {
         id: "1",
       };
 
-      const { dayToDisplayedTasks, nextDayControls, moveCursorTo } = setUp({
+      const { dayToDisplayedTasks, moveCursorTo, handlers } = setUp({
         tasks: [task],
       });
 
-      nextDayControls.handleGripMouseDown(task, EditMode.RESIZE);
-      moveCursorTo("02:00");
+      handlers.handleGripMouseDown(task, EditMode.RESIZE);
+      moveCursorTo(moment("2023-01-02 02:00"));
 
       expect(get(dayToDisplayedTasks)).toMatchObject({
         [dayKey]: {

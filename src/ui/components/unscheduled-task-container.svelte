@@ -1,41 +1,38 @@
 <script lang="ts">
   import type { Moment } from "moment";
   import { OverlayScrollbarsComponent } from "overlayscrollbars-svelte";
-  import { getContext } from "svelte";
 
-  import { obsidianContext } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import { settings } from "../../global-store/settings";
   import { isLocal } from "../../task-types";
-  import { type ObsidianContext } from "../../types";
 
   import RemoteTimeBlock from "./remote-time-block.svelte";
   import TimeBlockBase from "./time-block-base.svelte";
   import UnscheduledTimeBlock from "./unscheduled-time-block.svelte";
 
-  export let day: Moment;
+  const { day }: { day: Moment } = $props();
 
   const {
-    editContext: { getEditHandlers },
-  } = getContext<ObsidianContext>(obsidianContext);
+    editContext: {
+      handlers: { handleTaskMouseUp, handleUnscheduledTaskGripMouseDown },
+      getDisplayedTasksForTimeline,
+    },
+  } = getObsidianContext();
 
-  $: ({
-    displayedTasksForDay,
-    handleTaskMouseUp,
-    handleUnscheduledTaskGripMouseDown,
-  } = getEditHandlers(day));
+  const displayedTasksForTimeline = $derived(getDisplayedTasksForTimeline(day));
 </script>
 
-{#if $displayedTasksForDay.noTime.length > 0 && $settings.showUncheduledTasks}
+{#if $displayedTasksForTimeline.noTime.length > 0 && $settings.showUncheduledTasks}
   <OverlayScrollbarsComponent
     class="unscheduled-task-container overlayscrollbars-svelte"
     defer
     options={{ scrollbars: { theme: "os-theme-custom" } }}
   >
-    {#each $displayedTasksForDay.noTime as task}
+    {#each $displayedTasksForTimeline.noTime as task}
       {#if isLocal(task)}
         <UnscheduledTimeBlock
           onGripMouseDown={handleUnscheduledTaskGripMouseDown}
-          onMouseUp={() => {
+          onpointerup={() => {
             handleTaskMouseUp(task);
           }}
           {task}

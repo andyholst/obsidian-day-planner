@@ -1,14 +1,13 @@
 <script lang="ts">
-  import type { Moment } from "moment";
+  import { type Moment } from "moment";
   import { Menu } from "obsidian";
-  import { getContext } from "svelte";
-  import { type Writable, get } from "svelte/store";
-  import { fly } from "svelte/transition";
+  import { get } from "svelte/store";
+  import { slide } from "svelte/transition";
 
-  import { dateRangeContextKey, obsidianContext } from "../../../constants";
+  import { getDateRangeContext } from "../../../context/date-range-context";
+  import { getObsidianContext } from "../../../context/obsidian-context";
   import { isToday } from "../../../global-store/current-time";
   import { getVisibleHours } from "../../../global-store/derived-settings";
-  import type { ObsidianContext } from "../../../types";
   import { isOnWeekend } from "../../../util/moment";
   import {
     getNextAdjacentRange,
@@ -18,12 +17,14 @@
   } from "../../../util/range";
   import * as r from "../../../util/range";
   import ControlButton from "../control-button.svelte";
+  import { createSlide } from "../defaults";
   import {
     Settings,
     ChevronLeft,
     ChevronRight,
     CalendarArrowUp,
     Columns3,
+    Search as SearchIcon,
   } from "../lucide";
   import ResizeHandle from "../resize-handle.svelte";
   import ResizeableBox from "../resizeable-box.svelte";
@@ -33,11 +34,63 @@
   import Timeline from "../timeline.svelte";
   import UnscheduledTaskContainer from "../unscheduled-task-container.svelte";
 
-  const { workspaceFacade, settings } =
-    getContext<ObsidianContext>(obsidianContext);
-  const dateRange = getContext<Writable<Moment[]>>(dateRangeContextKey);
+  const { workspaceFacade, settings } = getObsidianContext();
+  const dateRange = getDateRangeContext();
 
-  let settingsVisible = $state(false);
+  type SideControls = "none" | "settings" | "search";
+
+  let visibleSideControls = $state<SideControls>("none");
+
+  function toggleSideControls(toggledControls: SideControls) {
+    visibleSideControls =
+      visibleSideControls === toggledControls ? "none" : toggledControls;
+  }
+
+  function handleColumnChange(event: MouseEvent) {
+    const currentMode = get(settings).multiDayRange;
+    const menu = new Menu();
+
+    menu.addItem((item) =>
+      item
+        .setTitle("Full week")
+        .setChecked(currentMode === "full-week")
+        .onClick(() => {
+          settings.update((previous) => ({
+            ...previous,
+            multiDayRange: "full-week",
+          }));
+        }),
+    );
+    menu.addItem((item) => {
+      item
+        .setTitle("Work week")
+        .setChecked(currentMode === "work-week")
+        .onClick(() => {
+          settings.update((previous) => ({
+            ...previous,
+            multiDayRange: "work-week",
+          }));
+        });
+    });
+    menu.addItem((item) => {
+      item
+        .setTitle("3 days")
+        .setChecked(currentMode === "3-days")
+        .onClick(() => {
+          settings.update((previous) => ({
+            ...previous,
+            multiDayRange: "3-days",
+          }));
+        });
+    });
+
+    menu.showAtMouseEvent(event);
+  }
+
+  function getColumnBackgroundColor(day: Moment) {
+    return isOnWeekend(day) ? "var(--background-primary)" : "";
+  }
+
   let headerRef: HTMLDivElement | undefined;
 
   function handleScroll(event: Event) {
@@ -47,7 +100,11 @@
   }
 </script>
 
-<div bind:this={headerRef} class="header">
+<div
+  bind:this={headerRef}
+  style:--timeline-internal-column-count={$settings.showTimeTracker ? 2 : 1}
+  class="header"
+>
   <div class="header-row day-buttons">
     <div class="corner"></div>
     {#each $dateRange as day}
@@ -78,58 +135,20 @@
 
 <div class="controls-sidebar">
   <ControlButton
-    classes="settings-button"
-    isActive={settingsVisible}
-    onclick={() => {
-      settingsVisible = !settingsVisible;
-    }}
+    isActive={visibleSideControls === "search"}
+    onclick={() => toggleSideControls("search")}
+  >
+    <SearchIcon />
+  </ControlButton>
+
+  <ControlButton
+    isActive={visibleSideControls === "settings"}
+    onclick={() => toggleSideControls("settings")}
   >
     <Settings />
   </ControlButton>
 
-  <ControlButton
-    label="Change columns"
-    onclick={(event) => {
-      const currentMode = get(settings).multiDayRange;
-      const menu = new Menu();
-
-      menu.addItem((item) =>
-        item
-          .setTitle("Full week")
-          .setChecked(currentMode === "full-week")
-          .onClick(() => {
-            settings.update((previous) => ({
-              ...previous,
-              multiDayRange: "full-week",
-            }));
-          }),
-      );
-      menu.addItem((item) => {
-        item
-          .setTitle("Work week")
-          .setChecked(currentMode === "work-week")
-          .onClick(() => {
-            settings.update((previous) => ({
-              ...previous,
-              multiDayRange: "work-week",
-            }));
-          });
-      });
-      menu.addItem((item) => {
-        item
-          .setTitle("3 days")
-          .setChecked(currentMode === "3-days")
-          .onClick(() => {
-            settings.update((previous) => ({
-              ...previous,
-              multiDayRange: "3-days",
-            }));
-          });
-      });
-
-      menu.showAtMouseEvent(event);
-    }}
-  >
+  <ControlButton label="Change columns" onclick={handleColumnChange}>
     <Columns3 />
   </ControlButton>
 
@@ -171,12 +190,17 @@
   </ControlButton>
 </div>
 
-{#if settingsVisible}
+{#if visibleSideControls !== "none"}
   <div
-    class="settings-controls-container"
-    transition:fly={{ x: 400, duration: 100, opacity: 0.5 }}
+    class="side-controls-container"
+    transition:slide={createSlide({ axis: "x" })}
   >
-    <SettingsControls />
+    {#if visibleSideControls === "settings"}
+      <SettingsControls />
+    {/if}
+    <!--{#if visibleSideControls === "search"}-->
+    <!--  <Search />-->
+    <!--{/if}-->
   </div>
 {/if}
 
@@ -186,9 +210,11 @@
     visibleHours={getVisibleHours($settings)}
   />
   {#each $dateRange as day}
-    <div class="day-column" class:weekend={isOnWeekend(day)}>
-      <Timeline {day} isUnderCursor={true} />
-    </div>
+    <Timeline
+      --column-background-color={getColumnBackgroundColor(day)}
+      {day}
+      isUnderCursor={true}
+    />
   {/each}
 </Scroller>
 
@@ -232,22 +258,11 @@
     border-left: none;
   }
 
-  .day-column {
-    display: flex;
-    flex: 1 0 200px;
-    flex-direction: column;
-
-    height: fit-content;
-
-    background-color: var(--background-secondary);
-    border-right: 1px solid var(--background-modifier-border);
-  }
-
-  .day-column:last-child {
-    border-right: none;
-  }
-
   .header {
+    --cell-flex-basis: calc(
+      var(--timeline-flex-basis) * var(--timeline-internal-column-count, 1)
+    );
+
     position: relative;
     z-index: 1000;
 
@@ -260,9 +275,9 @@
 
   .header-cell {
     overflow-x: hidden;
-    flex: 1 0 200px;
+    flex: 1 0 var(--cell-flex-basis);
 
-    width: 200px;
+    width: var(--cell-flex-basis);
 
     background-color: var(--background-primary);
     border-right: 1px solid var(--background-modifier-border);
@@ -270,7 +285,7 @@
   }
 
   .header-cell:last-of-type {
-    flex: 1 0 calc(200px + var(--scrollbar-width));
+    flex: 1 0 calc(var(--cell-flex-basis) + var(--scrollbar-width));
     border-right: none;
   }
 
@@ -283,9 +298,10 @@
     background-color: var(--background-primary);
   }
 
-  .settings-controls-container {
+  .side-controls-container {
     grid-column: 3;
     grid-row: span 2;
-    padding: 0 var(--size-4-2);
+    width: min(320px, 50vw);
+    border-left: 1px solid var(--background-modifier-border);
   }
 </style>

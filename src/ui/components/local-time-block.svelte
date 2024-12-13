@@ -1,10 +1,9 @@
 <script lang="ts">
   import { offset } from "@floating-ui/dom";
-  import { getContext } from "svelte";
 
-  import { obsidianContext, vibrationDurationMillis } from "../../constants";
+  import { vibrationDurationMillis } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import type { LocalTask, WithPlacing, WithTime } from "../../task-types";
-  import type { ObsidianContext } from "../../types";
   import * as t from "../../util/task-utils";
   import { hoverPreview } from "../actions/hover-preview";
   import type { EditHandlers } from "../hooks/use-edit/create-edit-handlers";
@@ -18,14 +17,19 @@
   import ScheduledTimeBlock from "./scheduled-time-block.svelte";
 
   export let task: WithPlacing<WithTime<LocalTask>>;
-  export let onGripMouseDown: EditHandlers["handleGripMouseDown"];
-  export let onResizerMouseDown: EditHandlers["handleResizerMouseDown"];
-  export let onFloatingUiPointerDown: (event: PointerEvent) => void;
-  export let onMouseUp: () => void;
+  export let onGripMouseDown: EditHandlers["handleGripMouseDown"] | undefined =
+    undefined;
+  export let onResizerMouseDown:
+    | EditHandlers["handleResizerMouseDown"]
+    | undefined = undefined;
+  export let onFloatingUiPointerDown:
+    | ((event: PointerEvent) => void)
+    | undefined = undefined;
+  export let onpointerup: () => void;
 
   const {
     editContext: { editOperation },
-  } = getContext<ObsidianContext>(obsidianContext);
+  } = getObsidianContext();
 
   const drag = useFloatingUi({
     middleware: [offset({ mainAxis: -32 })],
@@ -58,7 +62,7 @@
     (el: HTMLElement) => hoverPreview(el, task),
   ]}
   on:longpress={() => {
-    navigator.vibrate(vibrationDurationMillis);
+    navigator.vibrate?.(vibrationDurationMillis);
     isDragActive.set(true);
     isResizeActive.set(true);
     isResizeFromTopActive.set(true);
@@ -73,13 +77,13 @@
     resize.handleAnchorPointerLeave(event);
     resizeFromTop.handleAnchorPointerLeave(event);
   }}
-  on:pointerup={onMouseUp}
+  on:pointerup={onpointerup}
 >
   <RenderedMarkdown {task} />
 </ScheduledTimeBlock>
 
-{#if !$editOperation}
-  {#if $isDragActive}
+{#if !$editOperation && onFloatingUiPointerDown}
+  {#if $isDragActive && onGripMouseDown}
     <FloatingUi
       onPointerDown={onFloatingUiPointerDown}
       onPointerLeave={drag.handleFloatingUiPointerLeave}
@@ -101,46 +105,51 @@
     </FloatingUi>
   {/if}
 
-  {#if $isResizeActive}
-    <FloatingUi
-      onPointerDown={onFloatingUiPointerDown}
-      onPointerLeave={resize.handleFloatingUiPointerLeave}
-      onTapOutside={resize.handleFloatingUiTapOutside}
-      use={[resize.floatingUiSetup]}
-    >
-      <ResizeControls
-        onResize={() => {
-          onResizerMouseDown(task, EditMode.RESIZE);
-        }}
-        onResizeWithNeighbors={() => {
-          onResizerMouseDown(task, EditMode.RESIZE_AND_SHIFT_OTHERS);
-        }}
-        onResizeWithShrink={() => {
-          onResizerMouseDown(task, EditMode.RESIZE_AND_SHRINK_OTHERS);
-        }}
-      />
-    </FloatingUi>
-  {/if}
+  {#if onResizerMouseDown}
+    {#if $isResizeActive}
+      <FloatingUi
+        onPointerDown={onFloatingUiPointerDown}
+        onPointerLeave={resize.handleFloatingUiPointerLeave}
+        onTapOutside={resize.handleFloatingUiTapOutside}
+        use={[resize.floatingUiSetup]}
+      >
+        <ResizeControls
+          onResize={() => {
+            onResizerMouseDown(task, EditMode.RESIZE);
+          }}
+          onResizeWithNeighbors={() => {
+            onResizerMouseDown(task, EditMode.RESIZE_AND_SHIFT_OTHERS);
+          }}
+          onResizeWithShrink={() => {
+            onResizerMouseDown(task, EditMode.RESIZE_AND_SHRINK_OTHERS);
+          }}
+        />
+      </FloatingUi>
+    {/if}
 
-  {#if $isResizeFromTopActive}
-    <FloatingUi
-      onPointerDown={onFloatingUiPointerDown}
-      onPointerLeave={resizeFromTop.handleFloatingUiPointerLeave}
-      onTapOutside={resizeFromTop.handleFloatingUiTapOutside}
-      use={[resizeFromTop.floatingUiSetup]}
-    >
-      <ResizeControls
-        onResize={() => {
-          onResizerMouseDown(task, EditMode.RESIZE_FROM_TOP);
-        }}
-        onResizeWithNeighbors={() => {
-          onResizerMouseDown(task, EditMode.RESIZE_FROM_TOP_AND_SHIFT_OTHERS);
-        }}
-        onResizeWithShrink={() => {
-          onResizerMouseDown(task, EditMode.RESIZE_FROM_TOP_AND_SHRINK_OTHERS);
-        }}
-        reverse
-      />
-    </FloatingUi>
+    {#if $isResizeFromTopActive}
+      <FloatingUi
+        onPointerDown={onFloatingUiPointerDown}
+        onPointerLeave={resizeFromTop.handleFloatingUiPointerLeave}
+        onTapOutside={resizeFromTop.handleFloatingUiTapOutside}
+        use={[resizeFromTop.floatingUiSetup]}
+      >
+        <ResizeControls
+          onResize={() => {
+            onResizerMouseDown(task, EditMode.RESIZE_FROM_TOP);
+          }}
+          onResizeWithNeighbors={() => {
+            onResizerMouseDown(task, EditMode.RESIZE_FROM_TOP_AND_SHIFT_OTHERS);
+          }}
+          onResizeWithShrink={() => {
+            onResizerMouseDown(
+              task,
+              EditMode.RESIZE_FROM_TOP_AND_SHRINK_OTHERS,
+            );
+          }}
+          reverse
+        />
+      </FloatingUi>
+    {/if}
   {/if}
 {/if}

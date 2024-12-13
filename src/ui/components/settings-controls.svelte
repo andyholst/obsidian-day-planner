@@ -1,17 +1,15 @@
 <script lang="ts">
   import { range } from "lodash/fp";
-  import { AlertTriangle, Info } from "lucide-svelte";
-  import { getContext } from "svelte";
 
-  import { obsidianContext } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import { settings } from "../../global-store/settings";
-  import type { ObsidianContext } from "../../types";
   import { useDataviewSource } from "../hooks/use-dataview-source";
 
+  import Callout from "./callout.svelte";
   import Dropdown from "./obsidian/dropdown.svelte";
   import SettingItem from "./obsidian/setting-item.svelte";
 
-  const { refreshTasks } = getContext<ObsidianContext>(obsidianContext);
+  const { refreshTasks } = getObsidianContext();
 
   const {
     sourceIsEmpty,
@@ -33,7 +31,7 @@
   }
 </script>
 
-<div class="stretcher">
+<div class="dataview-source">
   Include additional files, folders and tags with a Dataview source:
   <input
     placeholder={`-#archived and -"notes/personal"`}
@@ -41,24 +39,28 @@
     type="text"
     bind:value={$dataviewSourceInput}
   />
+
   {#if $sourceIsEmpty}
-    <div class="info-container">
-      <AlertTriangle class="svg-icon" />
-      Tasks are pulled only from daily notes
-    </div>
+    <Callout type="warning"
+      >Tasks are pulled only from daily notes
+      {#if $settings.plannerHeading}
+        under planner heading: "{$settings.plannerHeading}"
+      {/if}
+    </Callout>
   {/if}
+
   {#if $dataviewErrorMessage.length > 0}
-    <div class="info-container">
+    <Callout type="error">
       <pre class="error-message">{$dataviewErrorMessage}</pre>
-    </div>
+    </Callout>
   {/if}
-  <div class="info-container">
-    <Info class="svg-icon" />
+
+  <Callout type="info">
     <a
       href="https://blacksmithgu.github.io/obsidian-dataview/reference/sources/"
       >Dataview source reference</a
     >
-  </div>
+  </Callout>
 </div>
 <div class="settings">
   <SettingItem>
@@ -160,10 +162,26 @@
       </div>
     </SettingItem>
   {/if}
+
+  <div class="controls-section">Time tracker</div>
+
+  <SettingItem>
+    <svelte:fragment slot="name">Show time tracker</svelte:fragment>
+    <div
+      slot="control"
+      class="checkbox-container mod-small"
+      class:is-enabled={$settings.showTimeTracker}
+      onclick={() => {
+        $settings.showTimeTracker = !$settings.showTimeTracker;
+      }}
+    >
+      <input tabindex="0" type="checkbox" />
+    </div>
+  </SettingItem>
 </div>
 
 <style>
-  .stretcher {
+  .dataview-source {
     display: flex;
     flex-direction: column;
     gap: var(--size-4-2);
@@ -172,13 +190,16 @@
     color: var(--text-muted);
   }
 
-  .stretcher input {
+  .dataview-source input {
     font-family: var(--font-monospace);
   }
 
   .error-message {
     overflow-x: auto;
+
+    margin-block: 0;
     padding: var(--size-4-1);
+
     border: 1px solid var(--text-error);
     border-radius: var(--radius-s);
   }
@@ -189,7 +210,8 @@
     font-weight: var(--font-medium);
   }
 
-  .settings {
-    margin: var(--size-4-1) 0;
+  .settings,
+  .dataview-source {
+    margin-inline: var(--size-4-3);
   }
 </style>

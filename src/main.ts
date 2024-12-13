@@ -1,26 +1,34 @@
-import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
+import {
+  MarkdownView,
+  Notice,
+  Plugin,
+  WorkspaceLeaf,
+  type MarkdownFileInfo,
+} from "obsidian";
 import {
   createDailyNote,
   getDateFromPath,
 } from "obsidian-daily-notes-interface";
+import { type STask } from "obsidian-dataview";
 import { mount } from "svelte";
 import { fromStore, get, writable, type Writable } from "svelte/store";
-import { isNotVoid } from "typed-assert";
+import { isInstanceOf, isNotVoid } from "typed-assert";
 
 import {
   errorContextKey,
-  obsidianContext,
+  obsidianContextKey,
   viewTypeReleaseNotes,
   viewTypeTimeline,
-  viewTypeWeekly,
+  viewTypeMultiDay,
 } from "./constants";
+import { currentTime } from "./global-store/current-time";
 import { settings } from "./global-store/settings";
 import {
   compareByTimestampInText,
   fromMarkdown,
   positionContainsPoint,
   sortListsRecursively,
-  sortListsRecursivelyUnderHeading,
+  sortListsRecursivelyInMarkdown,
   toEditorPos,
   toMarkdown,
   toMdastPoint,
@@ -29,32 +37,32 @@ import { DataviewFacade } from "./service/dataview-facade";
 import {
   applyScopedUpdates,
   createTransaction,
+  getTaskDiffFromEditState,
+  mapTaskDiffToUpdates,
   TransactionWriter,
 } from "./service/diff-writer";
 import { STaskEditor } from "./service/stask-editor";
 import { VaultFacade } from "./service/vault-facade";
 import { WorkspaceFacade } from "./service/workspace-facade";
 import { type DayPlannerSettings, defaultSettings } from "./settings";
-import type { LocalTask } from "./task-types";
-import type { ObsidianContext } from "./types";
+import { createGetTasksApi } from "./tasks-plugin";
+import type { ObsidianContext, OnUpdateFn } from "./types";
 import StatusBarWidget from "./ui/components/status-bar-widget.svelte";
-import { ConfirmationModal } from "./ui/confirmation-modal";
+import { askForConfirmation } from "./ui/confirmation-modal";
+import { EditMode } from "./ui/hooks/use-edit/types";
 import MultiDayView from "./ui/multi-day-view";
 import { DayPlannerReleaseNotesView } from "./ui/release-notes";
 import { DayPlannerSettingsTab } from "./ui/settings-tab";
+import { SingleSuggestModal } from "./ui/SingleSuggestModal";
 import TimelineView from "./ui/timeline-view";
 import { createUndoNotice } from "./ui/undo-notice";
+import * as c from "./util/clock";
 import { createHooks } from "./util/create-hooks.svelte";
 import { createRenderMarkdown } from "./util/create-render-markdown";
 import { createShowPreview } from "./util/create-show-preview";
 import { createDailyNoteIfNeeded } from "./util/daily-notes";
 import { notifyAboutStartedTasks } from "./util/notify-about-started-tasks";
 import { getUpdateTrigger } from "./util/store";
-import * as t from "./util/task-utils";
-import {
-  getTaskDiffFromEditState,
-  mapTaskDiffToUpdates,
-} from "./util/tasks-utils";
 
 export default class DayPlanner extends Plugin {
   settings!: () => DayPlannerSettings;
@@ -70,7 +78,9 @@ export default class DayPlanner extends Plugin {
   async onload() {
     await this.initSettingsStore();
 
-    this.vaultFacade = new VaultFacade(this.app.vault, this.getTasksApi);
+    const getTasksApi = createGetTasksApi(this.app);
+
+    this.vaultFacade = new VaultFacade(this.app.vault, getTasksApi);
     this.transationWriter = new TransactionWriter(this.vaultFacade);
     this.workspaceFacade = new WorkspaceFacade(
       this.app.workspace,
@@ -101,13 +111,13 @@ export default class DayPlanner extends Plugin {
   async onunload() {
     return Promise.all([
       this.detachLeavesOfType(viewTypeTimeline),
-      this.detachLeavesOfType(viewTypeWeekly),
+      this.detachLeavesOfType(viewTypeMultiDay),
     ]);
   }
 
   initWeeklyLeaf = async () => {
     await this.app.workspace.getLeaf("tab").setViewState({
-      type: viewTypeWeekly,
+      type: viewTypeMultiDay,
       active: true,
     });
   };
@@ -143,11 +153,6 @@ export default class DayPlanner extends Plugin {
       active: true,
     });
     this.app.workspace.rightSplit.expand();
-  };
-
-  private getTasksApi = () => {
-    // @ts-expect-error
-    return this.app.plugins.plugins["obsidian-tasks-plugin"]?.apiV1;
   };
 
   private async handleNewPluginVersion() {
@@ -228,6 +233,29 @@ export default class DayPlanner extends Plugin {
         );
       },
     });
+
+    this.addCommand({
+      id: "clock-in",
+      icon: "play",
+      name: "Clock in",
+      // @ts-expect-error
+      editorCallback: this.sTaskEditor.clockInUnderCursor,
+    });
+
+    this.addCommand({
+      icon: "square",
+      id: "clock-out",
+      name: "Clock out",
+      editorCallback: this.sTaskEditor.clockOutUnderCursor,
+    });
+
+    this.addCommand({
+      icon: "trash-2",
+      id: "cancel-clock",
+      name: "Cancel clock",
+      // @ts-expect-error
+      editorCallback: this.sTaskEditor.cancelClockUnderCursor,
+    });
   }
 
   private async initSettingsStore() {
@@ -259,20 +287,6 @@ export default class DayPlanner extends Plugin {
     });
   };
 
-  private askForConfirmation = async (props: {
-    title: string;
-    text: string;
-    cta: string;
-  }) => {
-    return new Promise((resolve) => {
-      new ConfirmationModal(this.app, {
-        ...props,
-        onAccept: async () => resolve(true),
-        onCancel: () => resolve(false),
-      }).open();
-    });
-  };
-
   private getPathsToCreate(paths: string[]) {
     return paths.reduce<string[]>(
       (result, path) =>
@@ -281,21 +295,75 @@ export default class DayPlanner extends Plugin {
     );
   }
 
+  private getSTaskUnderCursor = (view: MarkdownFileInfo) => {
+    isInstanceOf(
+      view,
+      MarkdownView,
+      "You can only get tasks from markdown editor views",
+    );
+
+    const file = view.file;
+
+    isNotVoid(file, "There is no file for view");
+
+    const sTask = this.dataviewFacade.getTaskAtLine({
+      path: file.path,
+      line: view.editor.getCursor().line,
+    });
+
+    isNotVoid(sTask, "There is no task under cursor");
+
+    return sTask;
+  };
+
   private registerViews() {
-    const onUpdate = async (base: Array<LocalTask>, next: Array<LocalTask>) => {
-      const nextWithUpdatedText = next.map(t.updateText);
-      const diff = getTaskDiffFromEditState(base, nextWithUpdatedText);
-      const updates = mapTaskDiffToUpdates(diff, this.settings());
+    const onEditCanceled = () => {
+      new Notice("Edit canceled");
+
+      // We need to manually reset tasks to the initial state
+      this.syncDataview?.();
+    };
+
+    const onUpdate: OnUpdateFn = async (base, next, mode) => {
+      const diff = getTaskDiffFromEditState(base, next);
+
+      if (mode === EditMode.CREATE) {
+        const created = diff.added[0];
+
+        isNotVoid(created);
+
+        const modalOutput: string | undefined = await new Promise((resolve) => {
+          new SingleSuggestModal({
+            app: this.app,
+            getDescriptionText: (value) =>
+              value.trim().length === 0
+                ? "Start typing to create a task"
+                : `Create item "${value}"`,
+            onChooseSuggestion: async ({ text }) => {
+              resolve(text);
+            },
+            onClose: () => {
+              resolve(undefined);
+            },
+          }).open();
+        });
+
+        if (!modalOutput) {
+          onEditCanceled();
+
+          return;
+        }
+
+        diff.added[0] = { ...created, text: modalOutput };
+      }
+
+      const updates = mapTaskDiffToUpdates(diff, mode, this.settings());
       const afterEach = this.settings().sortTasksInPlanAfterEdit
         ? (contents: string) =>
             applyScopedUpdates(
               contents,
               this.settings().plannerHeading,
-              (scoped) =>
-                sortListsRecursivelyUnderHeading(
-                  scoped,
-                  this.settings().plannerHeading,
-                ),
+              sortListsRecursivelyInMarkdown,
             )
         : undefined;
 
@@ -304,21 +372,23 @@ export default class DayPlanner extends Plugin {
         afterEach,
         settings: this.settings(),
       });
+
       const updatePaths = [
         ...new Set([...transaction.map(({ path }) => path)]),
       ];
+
       const needToCreate = this.getPathsToCreate(updatePaths);
 
       if (needToCreate.length > 0) {
-        const confirmed = await this.askForConfirmation({
+        const confirmed = await askForConfirmation({
+          app: this.app,
           title: "Need to create files",
           text: `The following files need to be created: ${needToCreate.join("; ")}`,
           cta: "Create",
         });
 
         if (!confirmed) {
-          new Notice("Edit canceled");
-          this.syncDataview?.();
+          onEditCanceled();
 
           return;
         }
@@ -351,12 +421,17 @@ export default class DayPlanner extends Plugin {
       isDarkMode,
       dateRanges,
       dataviewSyncTrigger,
+      search,
+      pointerDateTime,
+      tasksWithActiveClockProps,
+      getDisplayedTasksWithClocksForTimeline,
     } = createHooks({
       app: this.app,
       dataviewFacade: this.dataviewFacade,
       workspaceFacade: this.workspaceFacade,
       settingsStore: this.settingsStore,
       onUpdate,
+      currentTime,
     });
 
     this.syncDataview = () => dataviewSyncTrigger.set({});
@@ -365,6 +440,46 @@ export default class DayPlanner extends Plugin {
     this.register(
       editContext.cursor.subscribe(({ bodyCursor }) => {
         document.body.style.cursor = bodyCursor;
+      }),
+    );
+
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor, view) => {
+        let sTask: STask | undefined;
+
+        try {
+          // todo: use editor instead?
+          sTask = this.getSTaskUnderCursor(view);
+        } catch {
+          return;
+        }
+
+        menu.addSeparator();
+
+        if (c.hasActiveClockProp(sTask)) {
+          menu.addItem((item) => {
+            item
+              .setTitle("Clock out")
+              .setIcon("square")
+              .onClick(this.sTaskEditor.clockOutUnderCursor);
+          });
+
+          menu.addItem((item) => {
+            item
+              .setTitle("Cancel clock")
+              .setIcon("trash")
+              // @ts-expect-error
+              .onClick(this.sTaskEditor.cancelClockUnderCursor);
+          });
+        } else {
+          menu.addItem((item) => {
+            item
+              .setTitle("Clock in")
+              .setIcon("play")
+              // @ts-expect-error
+              .onClick(this.sTaskEditor.clockInUnderCursor);
+          });
+        }
       }),
     );
 
@@ -392,7 +507,42 @@ export default class DayPlanner extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: "jump-to-active-clock",
+      name: "Jump to active clock",
+      callback: () => {
+        const currentTasksWithActiveClockProps = get(tasksWithActiveClockProps);
+
+        if (currentTasksWithActiveClockProps.length === 0) {
+          new Notice("No active clocks found");
+
+          return;
+        }
+
+        const firstTaskWithActiveClockProp =
+          currentTasksWithActiveClockProps[0];
+
+        const { location } = firstTaskWithActiveClockProp;
+
+        isNotVoid(location);
+
+        this.workspaceFacade.revealLineInFile(
+          location.path,
+          location.position?.start?.line,
+        );
+      },
+    });
+
+    //todo: show only in dev mode
+    // this.addCommand({
+    //   id: "dump-metadata",
+    //   name: "Dump metadata to files",
+    //   callback: createDumpMetadataCommand(this.app),
+    // });
+
     const defaultObsidianContext: ObsidianContext = {
+      search,
+      sTaskEditor: this.sTaskEditor,
       workspaceFacade: this.workspaceFacade,
       initWeeklyView: this.initWeeklyLeaf,
       refreshTasks: this.dataviewFacade.getAllTasksFrom,
@@ -407,13 +557,16 @@ export default class DayPlanner extends Plugin {
       isDarkMode,
       settings,
       settingsSignal: fromStore(settings),
+      pointerDateTime,
+      tasksWithActiveClockProps,
+      getDisplayedTasksWithClocksForTimeline,
     };
 
     const componentContext = new Map<
       string,
       ObsidianContext | typeof errorStore
     >([
-      [obsidianContext, defaultObsidianContext],
+      [obsidianContextKey, defaultObsidianContext],
       [errorContextKey, errorStore],
     ]);
 
@@ -424,7 +577,7 @@ export default class DayPlanner extends Plugin {
     );
 
     this.registerView(
-      viewTypeWeekly,
+      viewTypeMultiDay,
       (leaf: WorkspaceLeaf) =>
         new MultiDayView(
           leaf,

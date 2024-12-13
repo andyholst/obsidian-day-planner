@@ -7,13 +7,13 @@ import { setUp } from "./util/setup";
 
 describe("create", () => {
   test("when creating and dragging, task duration changes", () => {
-    const { todayControls, moveCursorTo, dayToDisplayedTasks } = setUp({
+    const { handlers, moveCursorTo, dayToDisplayedTasks } = setUp({
       tasks: emptyTasks,
     });
 
-    moveCursorTo("01:00");
-    todayControls.handleContainerMouseDown();
-    moveCursorTo("02:00");
+    moveCursorTo(moment("2023-01-01 01:00"));
+    handlers.handleContainerMouseDown();
+    moveCursorTo(moment("2023-01-01 02:00"));
 
     expect(get(dayToDisplayedTasks)).toMatchObject({
       [dayKey]: {

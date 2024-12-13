@@ -14,12 +14,12 @@ export enum EditMode {
   RESIZE_AND_SHRINK_OTHERS = "RESIZE_AND_SHRINK_OTHERS",
   RESIZE_FROM_TOP_AND_SHRINK_OTHERS = "RESIZE_FROM_TOP_AND_SHRINK_OTHERS",
   CREATE = "CREATE",
+  SCHEDULE_SEARCH_RESULT = "SCHEDULE_SEARCH_RESULT",
 }
 
 export interface EditOperation {
   task: WithTime<LocalTask>;
   mode: EditMode;
-  day: Moment;
 }
 
 export type TaskTransformer = (

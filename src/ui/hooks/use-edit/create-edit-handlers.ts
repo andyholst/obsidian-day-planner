@@ -6,45 +6,58 @@ import { get } from "svelte/store";
 import { WorkspaceFacade } from "../../../service/workspace-facade";
 import type { DayPlannerSettings } from "../../../settings";
 import type { LocalTask, WithTime } from "../../../task-types";
-import { createTask } from "../../../util/task-utils";
+import { getMinutesSinceMidnight } from "../../../util/moment";
+import * as t from "../../../util/task-utils";
 
 import type { EditOperation } from "./types";
 import { EditMode } from "./types";
 
 export interface UseEditHandlersProps {
   startEdit: (operation: EditOperation) => void;
-  // todo: make dynamic, since it can change?
-  day: Moment;
   workspaceFacade: WorkspaceFacade;
-  cursorMinutes: Readable<number>;
   editOperation: Writable<EditOperation | undefined>;
   settings: Readable<DayPlannerSettings>;
+  pointerDateTime: Writable<{ dateTime?: Moment; type?: "dateTime" | "date" }>;
 }
 
 export function createEditHandlers({
-  day,
   workspaceFacade,
   startEdit,
-  cursorMinutes,
   editOperation,
   settings,
+  pointerDateTime,
 }: UseEditHandlersProps) {
   function handleContainerMouseDown() {
-    const newTask = createTask({
-      day,
-      startMinutes: get(cursorMinutes),
+    const pointerDay = get(pointerDateTime).dateTime;
+
+    // todo: move out this check
+    if (!pointerDay) {
+      throw new Error("Day cannot be undefined on edit");
+    }
+
+    const pointerMinutes = getMinutesSinceMidnight(pointerDay);
+
+    // todo: use datetime
+    const newTask = t.create({
+      day: pointerDay,
+      startMinutes: pointerMinutes,
       settings: get(settings),
     });
 
     startEdit({
       task: { ...newTask, isGhost: true },
       mode: EditMode.CREATE,
-      day,
     });
   }
 
   function handleResizerMouseDown(task: WithTime<LocalTask>, mode: EditMode) {
-    startEdit({ task, mode, day });
+    const pointerDay = get(pointerDateTime).dateTime;
+
+    if (!pointerDay) {
+      throw new Error("Day cannot be undefined on edit");
+    }
+
+    startEdit({ task, mode });
   }
 
   async function handleTaskMouseUp(task: LocalTask) {
@@ -56,12 +69,15 @@ export function createEditHandlers({
     await workspaceFacade.revealLineInFile(path, position?.start?.line);
   }
 
-  function handleGripMouseDown(task: WithTime<LocalTask>, mode: EditMode) {
-    startEdit({ task, mode, day });
-  }
-
   // todo: fix (should probably use "day")
   function handleUnscheduledTaskGripMouseDown(task: LocalTask) {
+    let pointerDay = get(pointerDateTime).dateTime;
+
+    if (!pointerDay) {
+      console.warn("Day should not be undefined on edit");
+      pointerDay = window.moment();
+    }
+
     const withAddedTime = {
       ...task,
       // todo: add a proper fix
@@ -71,26 +87,31 @@ export function createEditHandlers({
         : window.moment(),
     };
 
-    startEdit({ task: withAddedTime, mode: EditMode.DRAG, day });
+    startEdit({ task: withAddedTime, mode: EditMode.DRAG });
   }
 
-  function handleMouseEnter() {
-    editOperation.update(
-      (previous) =>
-        previous && {
-          ...previous,
-          day,
-        },
-    );
+  function handleSearchResultGripMouseDown(task: LocalTask) {
+    const dateTime = get(pointerDateTime).dateTime;
+
+    if (!dateTime) {
+      throw new Error("Day cannot be undefined on edit");
+    }
+
+    const withAddedTime = {
+      ...task,
+      startTime: dateTime,
+    };
+
+    startEdit({ task: withAddedTime, mode: EditMode.SCHEDULE_SEARCH_RESULT });
   }
 
   return {
-    handleMouseEnter,
-    handleGripMouseDown,
+    handleGripMouseDown: handleResizerMouseDown,
     handleContainerMouseDown,
     handleResizerMouseDown,
     handleTaskMouseUp,
     handleUnscheduledTaskGripMouseDown,
+    handleSearchResultGripMouseDown,
   };
 }
 

@@ -1,15 +1,13 @@
 <script lang="ts">
   import type { Moment } from "moment";
-  import { getContext } from "svelte";
   import { isNotVoid } from "typed-assert";
 
-  import { obsidianContext } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import { isToday } from "../../global-store/current-time";
   import { getVisibleHours, snap } from "../../global-store/derived-settings";
-  import { settings } from "../../global-store/settings";
   import { isRemote } from "../../task-types";
-  import { type ObsidianContext } from "../../types";
-  import { getRenderKey } from "../../util/task-utils";
+  import { minutesToMomentOfDay } from "../../util/moment";
+  import { getRenderKey, offsetYToMinutes } from "../../util/task-utils";
   import { isTouchEvent } from "../../util/util";
 
   import Column from "./column.svelte";
@@ -18,31 +16,51 @@
   import RemoteTimeBlock from "./remote-time-block.svelte";
   import ScheduledTimeBlock from "./scheduled-time-block.svelte";
 
-  export let day: Moment;
-  export let isUnderCursor = false;
+  const {
+    day,
+    isUnderCursor = false,
+  }: { day: Moment; isUnderCursor?: boolean } = $props();
 
   const {
-    editContext: { confirmEdit, getEditHandlers, pointerOffsetY },
-  } = getContext<ObsidianContext>(obsidianContext);
+    pointerDateTime,
+    settings,
+    editContext: {
+      confirmEdit,
+      handlers: {
+        handleContainerMouseDown,
+        handleResizerMouseDown,
+        handleTaskMouseUp,
+        handleGripMouseDown,
+      },
+      getDisplayedTasksForTimeline,
+    },
+    getDisplayedTasksWithClocksForTimeline,
+  } = getObsidianContext();
 
-  $: ({
-    displayedTasksForDay,
-    handleContainerMouseDown,
-    handleResizerMouseDown,
-    handleTaskMouseUp,
-    handleGripMouseDown,
-    handleMouseEnter,
-  } = getEditHandlers(day));
-
+  const displayedTasksForTimeline = $derived(getDisplayedTasksForTimeline(day));
+  const displayedTasksWithClocksForTimeline = $derived(
+    getDisplayedTasksWithClocksForTimeline(day),
+  );
   let el: HTMLElement | undefined;
 
   function updatePointerOffsetY(event: PointerEvent) {
     isNotVoid(el);
 
+    // todo: add memo
     const viewportToElOffsetY = el.getBoundingClientRect().top;
     const borderTopToPointerOffsetY = event.clientY - viewportToElOffsetY;
+    const newOffsetY = snap(borderTopToPointerOffsetY, $settings);
+    const minutes = offsetYToMinutes(
+      newOffsetY,
+      $settings.zoomLevel,
+      $settings.startHour,
+    );
+    const dateTime = minutesToMomentOfDay(minutes, day);
 
-    pointerOffsetY.set(snap(borderTopToPointerOffsetY, $settings));
+    pointerDateTime.set({
+      dateTime,
+      type: "dateTime",
+    });
   }
 </script>
 
@@ -54,19 +72,17 @@
   <div
     bind:this={el}
     class="tasks absolute-stretch-x"
-    on:mouseenter={handleMouseEnter}
-    on:pointerdown={(event) => {
+    onpointerdown={(event) => {
       if (isTouchEvent(event) || event.target !== el) {
         return;
       }
 
       handleContainerMouseDown();
     }}
-    on:pointermove={updatePointerOffsetY}
-    on:pointerup={confirmEdit}
-    on:pointerup|stopPropagation
+    onpointermove={updatePointerOffsetY}
+    onpointerup={confirmEdit}
   >
-    {#each $displayedTasksForDay.withTime as task (getRenderKey(task))}
+    {#each $displayedTasksForTimeline.withTime as task (getRenderKey(task))}
       {#if isRemote(task)}
         <ScheduledTimeBlock {task}>
           <RemoteTimeBlock {task} />
@@ -75,16 +91,38 @@
         <LocalTimeBlock
           onFloatingUiPointerDown={updatePointerOffsetY}
           onGripMouseDown={handleGripMouseDown}
-          onMouseUp={() => {
+          onResizerMouseDown={handleResizerMouseDown}
+          onpointerup={() => {
             handleTaskMouseUp(task);
           }}
-          onResizerMouseDown={handleResizerMouseDown}
           {task}
         />
       {/if}
     {/each}
   </div>
 </Column>
+
+{#if $settings.showTimeTracker}
+  <Column
+    --column-background-color="hsl(var(--color-accent-hsl), 0.03)"
+    visibleHours={getVisibleHours($settings)}
+  >
+    {#if $isToday(day)}
+      <Needle autoScrollBlocked={isUnderCursor} showBall={false} />
+    {/if}
+
+    <div class="tasks absolute-stretch-x">
+      {#each $displayedTasksWithClocksForTimeline as task (getRenderKey(task))}
+        <LocalTimeBlock
+          onpointerup={() => {
+            handleTaskMouseUp(task);
+          }}
+          {task}
+        />
+      {/each}
+    </div>
+  </Column>
+{/if}
 
 <style>
   .tasks {

@@ -1,16 +1,20 @@
 import type { Moment } from "moment";
 import type { Readable, Writable } from "svelte/store";
 
+import type { STaskEditor } from "./service/stask-editor";
 import type { VaultFacade } from "./service/vault-facade";
 import type { WorkspaceFacade } from "./service/workspace-facade";
 import type { DayPlannerSettings, IcalConfig } from "./settings";
-import type { LocalTask } from "./task-types";
+import type { LocalTask, WithPlacing } from "./task-types";
+import { EditMode } from "./ui/hooks/use-edit/types";
 import { useEditContext } from "./ui/hooks/use-edit/use-edit-context";
+import type { useSearch } from "./ui/hooks/use-search.svelte";
 import { createShowPreview } from "./util/create-show-preview";
 
 export type OnUpdateFn = (
   base: Array<LocalTask>,
   next: Array<LocalTask>,
+  mode: EditMode,
 ) => Promise<void>;
 
 export type RelationToNow = "past" | "present" | "future";
@@ -39,6 +43,14 @@ export interface ObsidianContext {
   isDarkMode: { current: boolean };
   settings: Writable<DayPlannerSettings>;
   settingsSignal: { current: DayPlannerSettings };
+  pointerDateTime: Writable<{ dateTime?: Moment; type?: "dateTime" | "date" }>;
+  // todo: searchEngine/timeBlockSearch...
+  search: ReturnType<typeof useSearch>;
+  tasksWithActiveClockProps: Readable<LocalTask[]>;
+  sTaskEditor: STaskEditor;
+  getDisplayedTasksWithClocksForTimeline: (
+    day: Moment,
+  ) => Readable<Array<WithPlacing<LocalTask>>>;
 }
 
 export type ComponentContext = Map<string, unknown>;

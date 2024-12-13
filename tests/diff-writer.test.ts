@@ -7,18 +7,20 @@ import {
 import { vi, test, expect, describe } from "vitest";
 
 import { defaultDayFormat } from "../src/constants";
-import { sortListsRecursivelyUnderHeading } from "../src/mdast/mdast";
+import { sortListsRecursivelyInMarkdown } from "../src/mdast/mdast";
 import {
   applyScopedUpdates,
   createTransaction,
+  mapTaskDiffToUpdates,
   TransactionWriter,
+  type ViewDiff,
 } from "../src/service/diff-writer";
 import { VaultFacade } from "../src/service/vault-facade";
 import { defaultSettingsForTests } from "../src/settings";
 import type { LocalTask, WithTime } from "../src/task-types";
+import { EditMode } from "../src/ui/hooks/use-edit/types";
 import { toMinutes } from "../src/util/moment";
-import { createTask } from "../src/util/task-utils";
-import { type Diff, mapTaskDiffToUpdates } from "../src/util/tasks-utils";
+import * as t from "../src/util/task-utils";
 
 import {
   createInMemoryFile,
@@ -32,32 +34,29 @@ vi.mock("obsidian-daily-notes-interface", () => ({
     format: "YYYY-MM-DD",
     folder: ".",
   })),
+  DEFAULT_DAILY_NOTE_FORMAT: "YYYY-MM-DD",
 }));
 
-async function writeDiff(props: { diff: Diff; files: Array<InMemoryFile> }) {
+async function writeDiff(props: {
+  diff: ViewDiff;
+  files: Array<InMemoryFile>;
+  mode: EditMode;
+  afterEach?: (contents: string) => string;
+}) {
+  const { diff, files, mode, afterEach } = props;
+
   const getTasksApi = () => {
     throw new Error("Can't access tasks API inside tests");
   };
 
-  const { diff, files } = props;
   const vault = new InMemoryVault(files);
   const vaultFacade = new VaultFacade(vault as unknown as Vault, getTasksApi);
-  const updates = mapTaskDiffToUpdates(diff, defaultSettingsForTests);
+  const updates = mapTaskDiffToUpdates(diff, mode, defaultSettingsForTests);
   // todo: remove test tautology
   const transaction = createTransaction({
     updates,
     settings: defaultSettingsForTests,
-    afterEach: (contents: string) =>
-      applyScopedUpdates(
-        contents,
-        defaultSettingsForTests.plannerHeading,
-        (scoped) =>
-          sortListsRecursivelyUnderHeading(
-            scoped,
-            // todo: remove heading
-            defaultSettingsForTests.plannerHeading,
-          ),
-      ),
+    afterEach,
   });
   const writer = new TransactionWriter(vaultFacade);
 
@@ -71,15 +70,23 @@ function createTestTask(
     text?: string;
     day?: Moment;
     startMinutes?: number;
+    status?: string;
   },
 ) {
-  const { location, startMinutes = 0, text = "", day = moment() } = props;
-  return createTask({
+  const {
+    location,
+    startMinutes = 0,
+    text = "",
+    day = moment(),
+    status,
+  } = props;
+  return t.create({
     settings: { ...defaultSettingsForTests, eventFormatOnCreation: "bullet" },
     day,
     startMinutes,
     text,
     location,
+    status,
   });
 }
 
@@ -138,7 +145,7 @@ describe("From diff to vault", () => {
       ],
     };
 
-    const { vault } = await writeDiff({ diff, files });
+    const { vault } = await writeDiff({ diff, files, mode: EditMode.DRAG });
 
     expect(vault.getAbstractFileByPath("file-1").contents).toBe(`- Before
 - After
@@ -203,12 +210,12 @@ describe("From diff to vault", () => {
       ],
     };
 
-    const { vault } = await writeDiff({ diff, files });
+    const { vault } = await writeDiff({ diff, files, mode: EditMode.DRAG });
 
     expect(vault.getAbstractFileByPath("file-1").contents).toBe(`- Before
-- Updated task
+- 00:00 - 00:30 Updated task
   Text
-    - Updated subtask
+    - 00:00 - 00:30 Updated subtask
       Text
 - After
 `);
@@ -259,18 +266,18 @@ describe("From diff to vault", () => {
       ],
     };
 
-    const { vault } = await writeDiff({ diff, files });
+    const { vault } = await writeDiff({ diff, files, mode: EditMode.DRAG });
 
     expect(vault.getAbstractFileByPath(todayDailyNotePath).contents).toBe("");
     expect(vault.getAbstractFileByPath(tomorrowDailynotePath).contents)
       .toBe(`# Day planner
 
 - Other
-- Moved
+- 00:00 - 00:30 Moved
 `);
   });
 
-  test("Creates multiline tasks", async () => {
+  test("Creates multi-line tasks", async () => {
     const files = [
       createInMemoryFile({
         path: "file-1",
@@ -279,7 +286,7 @@ describe("From diff to vault", () => {
     ];
 
     const diff = {
-      created: [
+      added: [
         createTestTask({
           text: `- Task
   Text
@@ -304,9 +311,10 @@ describe("From diff to vault", () => {
       ],
     };
 
-    const { vault } = await writeDiff({ diff, files });
+    const { vault } = await writeDiff({ diff, files, mode: EditMode.DRAG });
 
-    expect(vault.getAbstractFileByPath("file-1").contents).toBe(`- Task
+    expect(vault.getAbstractFileByPath("file-1").contents)
+      .toBe(`- 00:00 - 00:30 Task
   Text
     - Subtask
       Text
@@ -327,7 +335,7 @@ describe("From diff to vault", () => {
     ];
 
     const diff = {
-      created: [
+      added: [
         createTestTask({
           text: "- Task",
           day: moment("2023-01-01"),
@@ -336,7 +344,7 @@ describe("From diff to vault", () => {
       ],
     };
 
-    const { vault } = await writeDiff({ diff, files });
+    const { vault } = await writeDiff({ diff, files, mode: EditMode.DRAG });
 
     expect(vault.getAbstractFileByPath("2023-01-01.md").contents).toBe(`# Dreams
 
@@ -344,7 +352,142 @@ describe("From diff to vault", () => {
 
 # Day planner
 
-- Task
+- 11:00 - 11:30 Task
+`);
+  });
+
+  test("Adds tasks plugin props to tasks", async () => {
+    const files = [
+      createInMemoryFile({
+        path: "tasks.md",
+        // todo: add block ID
+        contents: `- [ ] Buy milk
+- [ ] Listen to music
+- [ ] Play bowling
+`,
+      }),
+    ];
+    const task = createTestTask({
+      status: " ",
+      text: "- [ ] Listen to music",
+      day: moment("2023-01-01"),
+      startMinutes: toMinutes("11:00"),
+      location: {
+        path: "tasks.md",
+        position: {
+          start: {
+            line: 1,
+            col: 0,
+            offset: -1,
+          },
+          end: {
+            line: 1,
+            col: -1,
+            offset: -1,
+          },
+        },
+      },
+    });
+
+    const diff = {
+      added: [task],
+    };
+
+    const { vault } = await writeDiff({
+      diff,
+      files,
+      mode: EditMode.SCHEDULE_SEARCH_RESULT,
+    });
+
+    expect(vault.getAbstractFileByPath("tasks.md").contents)
+      .toBe(`- [ ] Buy milk
+- [ ] 11:00 - 11:30 Listen to music ⏳ 2023-01-01
+- [ ] Play bowling
+`);
+  });
+
+  test("Updates tasks plugin props without duplicating timestamps if moved to same time on another day", async () => {
+    const files = [
+      createInMemoryFile({
+        path: "tasks.md",
+        contents: `- [ ] Buy milk
+- [ ] 20:00 - 20:30 Listen to music ⏳ 2023-01-01
+- [ ] Play bowling
+`,
+      }),
+    ];
+    const task = createTestTask({
+      status: " ",
+      text: "- [ ] 20:00 - 20:30 Listen to music ⏳ 2023-01-01",
+      day: moment("2023-01-02"),
+      startMinutes: toMinutes("20:00"),
+      location: {
+        path: "tasks.md",
+        position: {
+          start: {
+            line: 1,
+            col: 0,
+            offset: -1,
+          },
+          end: {
+            line: 1,
+            col: -1,
+            offset: -1,
+          },
+        },
+      },
+    });
+
+    const diff = {
+      added: [task],
+    };
+
+    const { vault } = await writeDiff({
+      diff,
+      files,
+      mode: EditMode.SCHEDULE_SEARCH_RESULT,
+    });
+
+    expect(vault.getAbstractFileByPath("tasks.md").contents)
+      .toBe(`- [ ] Buy milk
+- [ ] 20:00 - 20:30 Listen to music ⏳ 2023-01-02
+- [ ] Play bowling
+`);
+  });
+
+  test("Adds a heading to daily notes if there is none", async () => {
+    vi.mocked(getDailyNoteSettings).mockReturnValue({
+      format: defaultDayFormat,
+      folder: ".",
+    });
+
+    const files = [
+      createInMemoryFile({
+        path: "2023-01-01.md",
+        contents: "",
+      }),
+    ];
+
+    const diff = {
+      added: [
+        createTestTask({
+          text: "- 11:00 - 12:00 Task",
+          day: moment("2023-01-01"),
+          startMinutes: toMinutes("11:00"),
+        }),
+      ],
+    };
+
+    const { vault } = await writeDiff({
+      diff,
+      files,
+      mode: EditMode.DRAG,
+    });
+
+    expect(vault.getAbstractFileByPath("2023-01-01.md").contents)
+      .toBe(`# Day planner
+
+- 11:00 - 11:30 Task
 `);
   });
 
@@ -367,7 +510,7 @@ describe("From diff to vault", () => {
       ];
 
       const diff = {
-        created: [
+        added: [
           createTestTask({
             text: "- 11:00 - 12:00 Task 2",
             day: moment("2023-01-01"),
@@ -376,13 +519,23 @@ describe("From diff to vault", () => {
         ],
       };
 
-      const { vault } = await writeDiff({ diff, files });
+      const { vault } = await writeDiff({
+        diff,
+        files,
+        mode: EditMode.DRAG,
+        afterEach: (contents: string) =>
+          applyScopedUpdates(
+            contents,
+            defaultSettingsForTests.plannerHeading,
+            sortListsRecursivelyInMarkdown,
+          ),
+      });
 
       expect(vault.getAbstractFileByPath("2023-01-01.md").contents)
         .toBe(`# Day planner
 
 - 10:00 - 11:00 Task 1
-- 11:00 - 12:00 Task 2
+- 11:00 - 11:30 Task 2
 - 12:00 - 13:00 Task 3
 `);
     });
@@ -429,13 +582,81 @@ describe("From diff to vault", () => {
         ],
       };
 
-      const { vault } = await writeDiff({ diff, files });
+      const { vault } = await writeDiff({
+        diff,
+        files,
+        mode: EditMode.DRAG,
+        afterEach: (contents: string) =>
+          applyScopedUpdates(
+            contents,
+            defaultSettingsForTests.plannerHeading,
+            sortListsRecursivelyInMarkdown,
+          ),
+      });
 
       expect(vault.getAbstractFileByPath("2023-01-01.md").contents)
         .toBe(`# Day planner
 
 - 10:00 - 11:00 Task 1
-- 11:00 - 12:00 Task 2
+- 11:00 - 11:30 Task 2
+`);
+    });
+
+    test("Skips sorting if day planner heading is not found", async () => {
+      vi.mocked(getDailyNoteSettings).mockReturnValue({
+        format: defaultDayFormat,
+        folder: ".",
+      });
+
+      const files = [
+        createInMemoryFile({
+          path: "2023-01-01.md",
+          contents: `- 12:00 - 13:00 Task 2
+- 10:00 - 11:00 Task 1
+`,
+        }),
+      ];
+
+      const diff = {
+        updated: [
+          createTestTask({
+            text: "- 11:00 - 11:30 Task 2",
+            day: moment("2023-01-01"),
+            startMinutes: toMinutes("11:00"),
+            location: {
+              path: "2023-01-01.md",
+              position: {
+                start: {
+                  line: 0,
+                  col: 0,
+                  offset: -1,
+                },
+                end: {
+                  line: 1,
+                  col: -1,
+                  offset: -1,
+                },
+              },
+            },
+          }),
+        ],
+      };
+
+      const { vault } = await writeDiff({
+        diff,
+        files,
+        mode: EditMode.DRAG,
+        afterEach: (contents: string) =>
+          applyScopedUpdates(
+            contents,
+            defaultSettingsForTests.plannerHeading,
+            sortListsRecursivelyInMarkdown,
+          ),
+      });
+
+      expect(vault.getAbstractFileByPath("2023-01-01.md").contents)
+        .toBe(`- 11:00 - 11:30 Task 2
+- 10:00 - 11:00 Task 1
 `);
     });
   });

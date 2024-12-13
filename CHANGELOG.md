@@ -1,3 +1,35 @@
+## 0.27.0
+
+### ✨ New features
+
+- Edit text in the command palette before task creation
+- Add descriptive icons to clock commands, so that they are easier to use in the mobile toolbar
+
+## 0.26.3
+
+### 🐞 Fixed issues
+
+- Fix tasks not added to daily note when there is no planner heading inside it
+- Fix clocks from daily notes not showing up in timeline & active clocks
+
+## 0.26.2
+
+### 🐞 Fixed issues
+
+- Fix messing up frontmatter when there is no planner heading in file
+
+## 0.26.0
+
+### ✨ New feature: time tracking (experimental)
+
+You can record time spent on tasks in the form of Dataview properties and then view the records as time blocks, much like planner entries. See [the docs for detailed instructions](https://github.com/ivan-lednev/obsidian-day-planner?tab=readme-ov-file#4-time-tracking).
+
+### 🐞 Fixed issues
+
+- Fixed crash for iOS on drag-and-drop edits (#519)
+- Fixed duplicated timestamps on drag-and-drop edits (#618)
+- Fixed removing task Dataview properties on edits (#370)
+
 ## 0.25.0
 
 ### 💥 Breaking changes

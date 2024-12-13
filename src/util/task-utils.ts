@@ -4,6 +4,7 @@ import type { Moment } from "moment";
 import { get } from "svelte/store";
 import { isNotVoid } from "typed-assert";
 
+import { defaultDayFormat } from "../constants";
 import { settings } from "../global-store/settings";
 import { replaceOrPrependTimestamp } from "../parser/parser";
 import {
@@ -11,7 +12,9 @@ import {
   keylessScheduledPropRegExp,
   listTokenWithSpacesRegExp,
   looseTimestampAtStartOfLineRegExp,
+  obsidianBlockIdRegExp,
   scheduledPropRegExp,
+  scheduledPropRegExps,
   shortScheduledPropRegExp,
 } from "../regexp";
 import type { DayPlannerSettings } from "../settings";
@@ -22,8 +25,9 @@ import {
   type TaskLocation,
   type WithTime,
 } from "../task-types";
+import { EditMode } from "../ui/hooks/use-edit/types";
 
-import { getListTokens } from "./dataview";
+import { createMarkdownListTokens } from "./dataview";
 import { getId } from "./id";
 import {
   addMinutes,
@@ -31,7 +35,6 @@ import {
   minutesToMoment,
   minutesToMomentOfDay,
 } from "./moment";
-import { getDayKey, hasDateFromProp } from "./tasks-utils";
 
 export function getEndMinutes(task: {
   startTime: Moment;
@@ -121,7 +124,15 @@ export function createTimestamp(
   return `${start.format(format)} - ${end.format(format)}`;
 }
 
-export function toString(task: WithTime<LocalTask>) {
+export function getEmptyTasksForDay() {
+  return { withTime: [], noTime: [] };
+}
+
+export function getDayKey(day: Moment) {
+  return day.format(defaultDayFormat);
+}
+
+export function toString(task: WithTime<LocalTask>, mode: EditMode) {
   const firstLine = removeListTokens(getFirstLine(task.text));
 
   const updatedTimestamp = createTimestamp(
@@ -129,15 +140,27 @@ export function toString(task: WithTime<LocalTask>) {
     task.durationMinutes,
     get(settings).timestampFormat,
   );
-  const listTokens = getListTokens(task);
+  const listTokens = createMarkdownListTokens(task);
   const withUpdatedTimestamp = replaceOrPrependTimestamp(
     firstLine,
     updatedTimestamp,
   );
-  const updatedFirstLineText = updateScheduledPropInText(
+  let updatedFirstLineText = updateScheduledPropInText(
     withUpdatedTimestamp,
     getDayKey(task.startTime),
   );
+
+  // todo: should not be conditional
+  // todo: remove the hack
+  if (
+    mode === EditMode.SCHEDULE_SEARCH_RESULT &&
+    !shortScheduledPropRegExp.test(updatedFirstLineText)
+  ) {
+    updatedFirstLineText = addTasksPluginProp(
+      updatedFirstLineText,
+      `⏳ ${task.startTime.format(defaultDayFormat)}`,
+    );
+  }
 
   const otherLines = getLinesAfterFirst(task.text);
 
@@ -152,8 +175,20 @@ export function updateScheduledPropInText(text: string, dayKey: string) {
     .replace(keylessScheduledPropRegExp, `$1${dayKey}$2`);
 }
 
-export function updateText(task: WithTime<LocalTask>) {
-  return { ...task, text: toString(task) };
+export function appendText(taskText: string, toAppend: string) {
+  const blockIdMatch = obsidianBlockIdRegExp.exec(taskText);
+
+  if (blockIdMatch) {
+    const blockId = blockIdMatch[0];
+
+    return taskText.slice(0, blockIdMatch.index) + toAppend + blockId;
+  }
+
+  return taskText + toAppend;
+}
+
+export function addTasksPluginProp(text: string, prop: string) {
+  return appendText(text, ` ${prop}`);
 }
 
 export function offsetYToMinutes(
@@ -166,14 +201,22 @@ export function offsetYToMinutes(
   return (offsetY + hiddenHoursSize) / zoomLevel;
 }
 
-export function createTask(props: {
+export function create(props: {
   day: Moment;
   startMinutes: number;
   settings: DayPlannerSettings;
   text?: string;
   location?: TaskLocation;
+  status?: string;
 }): WithTime<LocalTask> {
-  const { day, startMinutes, settings, location, text = "New item" } = props;
+  const {
+    day,
+    startMinutes,
+    settings,
+    location,
+    text = "New item",
+    status,
+  } = props;
 
   return {
     location,
@@ -183,7 +226,7 @@ export function createTask(props: {
     startTime: minutesToMomentOfDay(startMinutes, day),
     symbol: "-",
     status:
-      settings.eventFormatOnCreation === "task"
+      status || settings.eventFormatOnCreation === "task"
         ? settings.taskStatusOnCreation
         : undefined,
   };
@@ -216,4 +259,14 @@ export function removeListTokens(text: string) {
 
 export function removeTimestampFromStart(text: string) {
   return text.replace(looseTimestampAtStartOfLineRegExp, "");
+}
+
+export function isTimeEqual(a: LocalTask, b: LocalTask) {
+  return (
+    a.startTime.isSame(b.startTime) && a.durationMinutes === b.durationMinutes
+  );
+}
+
+export function hasDateFromProp(task: LocalTask) {
+  return scheduledPropRegExps.some((regexp) => regexp.test(task.text));
 }
