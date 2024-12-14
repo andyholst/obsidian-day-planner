@@ -1,41 +1,47 @@
 <script lang="ts">
-  import { Moment } from "moment";
+  import type { Moment } from "moment";
   import { OverlayScrollbarsComponent } from "overlayscrollbars-svelte";
-  import { getContext } from "svelte";
 
-  import { obsidianContext } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import { settings } from "../../global-store/settings";
-  import type { ObsidianContext } from "../../types";
-  
-import UnscheduledTimeBlock from "./unscheduled-time-block.svelte";
+  import { isLocal } from "../../task-types";
 
-  export let day: Moment;
+  import RemoteTimeBlock from "./remote-time-block.svelte";
+  import TimeBlockBase from "./time-block-base.svelte";
+  import UnscheduledTimeBlock from "./unscheduled-time-block.svelte";
+
+  const { day }: { day: Moment } = $props();
 
   const {
-    editContext: { getEditHandlers },
-  } = getContext<ObsidianContext>(obsidianContext);
+    editContext: {
+      handlers: { handleTaskMouseUp, handleUnscheduledTaskGripMouseDown },
+      getDisplayedTasksForTimeline,
+    },
+  } = getObsidianContext();
 
-  $: ({
-    displayedTasks,
-    handleTaskMouseUp,
-    handleUnscheduledTaskGripMouseDown,
-  } = getEditHandlers(day));
+  const displayedTasksForTimeline = $derived(getDisplayedTasksForTimeline(day));
 </script>
 
-{#if $displayedTasks.noTime.length > 0 && $settings.showUncheduledTasks}
+{#if $displayedTasksForTimeline.noTime.length > 0 && $settings.showUncheduledTasks}
   <OverlayScrollbarsComponent
     class="unscheduled-task-container overlayscrollbars-svelte"
     defer
     options={{ scrollbars: { theme: "os-theme-custom" } }}
   >
-    {#each $displayedTasks.noTime as task}
-      <UnscheduledTimeBlock
-        onGripMouseDown={handleUnscheduledTaskGripMouseDown}
-        onMouseUp={() => {
-          handleTaskMouseUp(task);
-        }}
-        {task}
-      />
+    {#each $displayedTasksForTimeline.noTime as task}
+      {#if isLocal(task)}
+        <UnscheduledTimeBlock
+          onGripMouseDown={handleUnscheduledTaskGripMouseDown}
+          onpointerup={() => {
+            handleTaskMouseUp(task);
+          }}
+          {task}
+        />
+      {:else}
+        <TimeBlockBase {task}>
+          <RemoteTimeBlock {task} />
+        </TimeBlockBase>
+      {/if}
     {/each}
   </OverlayScrollbarsComponent>
 {/if}

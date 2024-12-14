@@ -1,4 +1,7 @@
-FROM node:16-alpine
+FROM node:22.11.0-alpine3.19
+
+ARG REPO_NAME
+ENV REPO_NAME=${REPO_NAME}
 
 RUN apk add --no-cache \
     git \
@@ -6,11 +9,15 @@ RUN apk add --no-cache \
     curl \
     zip
 
-RUN npm install -g npm@9.9.3
-RUN npm install -g husky@9.1.5
+    RUN npm config set registry http://registry.npmjs.org/
+    RUN npm config set strict-ssl false
+    RUN ulimit -Sn 10000
+    RUN npm set maxsockets 1
+    RUN npm install --loglevel=silly -g npm@10.9.0
+    RUN npm install --loglevel=silly -g eastasianwidth
+    RUN npm install --loglevel=silly -g husky@9.1.5
 
 COPY docker-files/npm/setup.sh /tmp/setup.sh
-
 RUN sed -i 's/\r$//' /tmp/setup.sh && chmod +x /tmp/setup.sh
 
 WORKDIR /app
@@ -18,8 +25,5 @@ WORKDIR /app
 COPY docker-files/npm/cmd.sh /usr/local/bin/cmd.sh
 RUN sed -i 's/\r$//' /usr/local/bin/cmd.sh && chmod +x /usr/local/bin/cmd.sh
 
-ENV REPO_NAME=${REPO_NAME}
-
 ENTRYPOINT ["/tmp/setup.sh"]
-
 CMD ["/usr/local/bin/cmd.sh"]

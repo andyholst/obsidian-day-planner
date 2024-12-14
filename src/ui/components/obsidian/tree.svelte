@@ -1,19 +1,37 @@
 <script lang="ts">
-  export let title: string;
+  import { type Snippet } from "svelte";
+  import { slide } from "svelte/transition";
+
+  import { createSlide } from "../defaults";
+
   import RightTriangle from "./right-triangle.svelte";
 
-  let isTreeVisible = true;
+  const {
+    children,
+    title,
+    flair,
+    isInitiallyOpen,
+  }: {
+    children: Snippet;
+    title: string;
+    flair?: string;
+    isInitiallyOpen?: boolean;
+  } = $props();
 
-  $: titleColor = isTreeVisible ? "var(--text-muted)" : "var(--text-faint)";
+  let isTreeVisible = $state(isInitiallyOpen);
+
+  const titleColor = $derived(
+    isTreeVisible ? "var(--text-muted)" : "var(--text-faint)",
+  );
 
   function toggleTree() {
     isTreeVisible = !isTreeVisible;
   }
 </script>
 
+<!--Partially uses Obsidian's classes for search result matches-->
 <div class="tree-container">
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <div class="tree-item-self is-clickable" on:click={toggleTree}>
+  <div class="tree-item-self is-clickable" onclick={toggleTree}>
     <div
       class="tree-item-icon collapse-icon"
       class:is-collapsed={!isTreeVisible}
@@ -21,9 +39,16 @@
       <RightTriangle />
     </div>
     <div style:color={titleColor} class="tree-item-inner">{title}</div>
+    {#if flair}
+      <div class="tree-item-flair-outer">
+        <span class="tree-item-flair">{flair}</span>
+      </div>
+    {/if}
   </div>
   {#if isTreeVisible}
-    <slot />
+    <div transition:slide={createSlide({ axis: "y" })}>
+      {@render children()}
+    </div>
   {/if}
 </div>
 
@@ -34,11 +59,12 @@
     flex-direction: column;
   }
 
-  .tree-item-self {
-    border-radius: 0;
-  }
-
   .tree-item-inner {
     font-weight: var(--font-medium);
+  }
+
+  .tree-item-self {
+    margin-bottom: 0;
+    border-radius: 0;
   }
 </style>

@@ -1,19 +1,20 @@
-I work on the plugin in my spare time, and I appreciate any kind of support!
+- 🗳️ [Add '👍' reactions under the issues important to you.](https://github.com/ivan-lednev/obsidian-day-planner/issues?q=is%3Aissue+is%3Aopen+sort%3Areactions-%2B1-desc) This helps me prioritize my work
+- 🪲 [Report bugs and suggest features](https://github.com/ivan-lednev/obsidian-day-planner/issues)
+- ❓ [Ask questions](https://github.com/ivan-lednev/obsidian-day-planner/discussions/new?category=q-a)
+- 🛠️ [Submit pull-requests](./CONTRIBUTING.md)
+- ❤️ If this project adds value to your life, consider supporting it finantially:
+  - <a href="https://www.buymeacoffee.com/machineelf" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
-✨ [Check out latest updates](https://github.com/ivan-lednev/obsidian-day-planner/releases)<br>
-🪲 [Report bugs and suggest features](https://github.com/ivan-lednev/obsidian-day-planner/issues)<br>
-❓ [Ask questions](https://github.com/ivan-lednev/obsidian-day-planner/discussions/new?category=q-a)<br>
-👍 [Give thumbs up to issues important to you](https://github.com/ivan-lednev/obsidian-day-planner/issues)<br>
-🪛 [Submit pull-requests](./CONTRIBUTING.md). If you don't know where to start, create an issue and I'll gladly give you some directions<br>
-❤️ Support the project directly:
 
-<a href="https://www.buymeacoffee.com/machineelf" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+Day Planner is a community plugin for [Obsidian](https://obsidian.md/). It adds editable calendar views and basic time-tracking. Day Planner is integrated with
+
+- The core Daily Notes plugin.
+- [the Tasks plugin](https://obsidian.md/plugins?id=obsidian-tasks-plugin)
+- Online calendars
 
 ## Table of contents
 
 - [Table of contents](#table-of-contents)
-- [What it looks like](#what-it-looks-like)
-- [Drag-and-drop demos](#drag-and-drop-demos)
 - [How to use it](#how-to-use-it)
   - [1. Showing events from your daily notes](#1-showing-events-from-your-daily-notes)
   - [2. tasks community plugin integration, showing events from other files in your vault](#2-tasks-community-plugin-integration-showing-events-from-other-files-in-your-vault)
@@ -22,44 +23,37 @@ I work on the plugin in my spare time, and I appreciate any kind of support!
     - [Where to get an iCloud link](#where-to-get-an-icloud-link)
     - [Where to get an Outlook link](#where-to-get-an-outlook-link)
       - [Alternative](#alternative)
-- [What else you can do](#what-else-you-can-do)
-- [Commands](#commands)
+  - [4. Time tracking](#4-time-tracking)
+    - [Recording clocks](#recording-clocks)
+    - [Clocks in timelines](#clocks-in-timelines)
+    - [Active clocks](#active-clocks)
+    - [Limitations](#limitations)
 - [Note on the old plugin version](#note-on-the-old-plugin-version)
 - [Acknowledgements](#acknowledgements)
-
-## What it looks like
-
-![](assets/ical-timeline-demo.png)
-![](assets/week.png)
-
-## Drag-and-drop demos
-
-<details>
-<summary>Adding time to tasks</summary>
-
-![](assets/schedule-demo.gif)
-
-</details>
-
-<details>
-<summary>Basic editing: create, move, resize (click to expand)</summary>
-
-![](assets/basic-edit.gif)
-
-</details>
 
 ## How to use it
 
 > [!Warning]
 > Dataview (community plugin, [see in Obsidian](obsidian://show-plugin?id=dataview)) should be installed and enabled for the plugin to work.
 
-To see the sidebar with a timeline, run the following command: `Show the day planner timeline`
+To open the timeline in the sidebar:
 
-The plugin has 3 distinct 'modes'. That is, it can display tasks from different sources:
+- Either run the command: `Show Timeline`
+- Or click the timeline icon in the left ribbon
+  - ![](./assets/open-timeline-ribbon-icon.png)
+
+To open multi-day planner:
+
+- Either run the command: `Show multi-day planner`
+- Or click on the icon in the left ribbon:
+  - ![](./assets/open-multi-day-view-ribbon-icon.png)
+
+The plugin has 4 distinct 'modes'. That is, it can display records from different sources:
 
 1. Daily notes
-1. Obsidian-tasks
-1. Online calendars
+2. Obsidian-tasks
+3. Online calendars
+4. Dataview clock properties
 
 Let's go over each one of them.
 
@@ -68,7 +62,7 @@ Let's go over each one of them.
 > [!Warning]
 > Either the core 'Daily Notes' (core plugin) or the 'Periodic Notes' (community plugin, [see in Obsidian](obsidian://show-plugin?id=periodic-notes)) should be enabled. This is what allows day-planner to 'see' and interact with your daily notes.
 
-This is the most straightforward case that works out of the box: you write your tasks in a daily note and they show up on the timeline:
+This works out of the box: you write your tasks in a daily note, and they show up on the timeline:
 
 ```md
 # Day planner
@@ -79,10 +73,11 @@ This is the most straightforward case that works out of the box: you write your 
 
 ### 2. [tasks community plugin](obsidian://show-plugin?id=obsidian-tasks-plugin) integration, showing events from other files in your vault
 
-This mode allows you to see tasks anywhere in the vault with dates added by the [tasks community plugin](obsidian://show-plugin?id=obsidian-tasks-plugin). With this, day-planner serves as a kind of calendar for the [tasks plugin](obsidian://show-plugin?id=obsidian-tasks-plugin).
+This mode allows you to see tasks anywhere in the vault with dates added by the [tasks community plugin](obsidian://show-plugin?id=obsidian-tasks-plugin).
 
 To make this work,
-1. Add a tag like `#task` or a folder to the Dataview source field. This is how the plugin knows which files it should monitor:
+
+1. Add a tag like `#task` or a folder to the Dataview source field:
    ![](./assets/dv-source.png)
 1. Add the tag (`#task` in this example) to the file with some tasks
 1. Add the `scheduled` property to a task in one of the formats:
@@ -94,13 +89,12 @@ To make this work,
 Full examples:
 
 ```md
----
-tags: "#task"
----
-
-- [ ] 08:00 - 10:00 This task uses the shorthand format ⏳ 2021-08-29
-- [ ] 11:00 - 13:00 This task uses the Dataview property format [scheduled:: 2021-08-29]
+- [ ] #task 08:00 - 10:00 This task uses the shorthand format ⏳ 2021-08-29
+- [ ] #task 11:00 - 13:00 This task uses the Dataview property format [scheduled:: 2021-08-29]
 ```
+
+> [!Note]
+> For now, the tags work at the level of files. So if `#task` is found anywhere in the file, all the tasks are going to be pulled into the calendar.
 
 ### 3. Showing internet calendars
 
@@ -109,6 +103,9 @@ To show events from internet calendars like **Google Calendar, iCloud Calendar a
 ![](./assets/ical-settings-demo.png)
 
 #### Where to get a Google Calendar link
+
+> [!Warning]
+> Make sure you copy the right link! It should end with `.ics`, otherwise, you won't see your events!
 
 [Google Calendar instructions](https://support.google.com/calendar/answer/37648?hl=en#zippy=%2Csync-your-google-calendar-view-edit%2Cget-your-calendar-view-only)
 
@@ -131,22 +128,46 @@ Here's how the settings look on the web version:
 
 If your organization doesn't let you share your calendar this way, you might try [a different way described in this issue](https://github.com/ivan-lednev/obsidian-day-planner/issues/395).
 
-## What else you can do
+### 4. Time tracking
 
-- Observe your progress in the status bar
-- Use the week view for multi-day planning
-- Color tasks based on time
-- Click on the timeline to create tasks
-- Drag tasks to re-schedule
-- Copy tasks
-- Move multiple tasks at once
+> [!Warning]
+> This feature is experimental and can break or change at any time in the near future. You can help to shape this feature by providing your feedback.
 
-## Commands
+You can record time spent on tasks in the form of Dataview properties and then view the records as time blocks, much like planner entries.
 
-- Show the Day Planner Timeline
-- Open today's Day Planner
-- Show the Week Planner
-- Insert Planner Heading at Cursor
+#### Recording clocks
+
+Start a clock by right-clicking on a task in the editor:
+
+<img src="./assets/clock-in-demo.png" width="75%">
+
+Stop the clock to record the time spent on a task or cancel it to discard the record:
+
+<img src="./assets/clock-out-demo.png" width="75%">
+
+There is a command for each of the menu items, available in the command palette or as a hotkey:
+
+<img src="./assets/clock-commands-demo.png" width="75%">
+
+#### Clocks in timelines
+
+You can enable an additional timeline column to see the recorded clocks next to your planner:
+
+<img src="./assets/show-time-tracker-settings.png" width="75%">
+
+#### Active clocks
+
+You can see the currently active clocks in the timeline sidebar:
+
+<img src="./assets/active-clocks-demo.png" width="75%">
+
+A right click on an active clock will bring the control menu:
+
+<img src="./assets/active-clocks-menu.png" width="75%">
+
+#### Limitations
+
+- For now clock time blocks are read-only. This is going to be addressed in the future.
 
 ## Note on the old plugin version
 
@@ -156,8 +177,9 @@ If for some reason you still want to use the old version, there are community fo
 
 ## Acknowledgements
 
-- Thanks to [James Lynch](https://github.com/lynchjames) for the original plugin
-- Thanks to [replete](https://github.com/replete), whose fork I initially forked
 - Thanks to [Michael Brenan](https://github.com/blacksmithgu) for Dataview
-- Thanks to [Joshua Tazman Reinier](https://github.com/joshuatazrein) for his plugin, which gave me an idea of how to integrate with Dataview
+- Thanks to [James Lynch](https://github.com/lynchjames) for the original plugin
+- Thanks to [Joshua Tazman Reinier](https://github.com/joshuatazrein) for his plugin that served as an inspiration
 - Thanks to @liamcain for creating daily note utilities and a helpful calendar plugin
+- Thanks to [Emacs Org Mode](https://orgmode.org/) for an idea of text-based time-tracking
+- Thanks to [Toggl Track](https://track.toggl.com/timer) for an idea of a great time-tracking UI

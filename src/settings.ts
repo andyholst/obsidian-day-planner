@@ -1,8 +1,10 @@
 import type { HexString } from "obsidian";
-import { DEFAULT_DAILY_NOTE_FORMAT } from "obsidian-daily-notes-interface";
+
+import { defaultDayFormat } from "./constants";
 
 export interface IcalConfig {
   name: string;
+  email?: string;
   url: string;
   color: string;
 }
@@ -12,6 +14,14 @@ export interface ColorOverride {
   color: string;
   darkModeColor: string;
 }
+
+export const eventFormats = ["task", "bullet"] as const;
+export const firstDaysOfWeek = [
+  "monday",
+  "sunday",
+  "saturday",
+  "friday",
+] as const;
 
 export interface DayPlannerSettings {
   progressIndicator: "pie" | "bar" | "none";
@@ -32,11 +42,13 @@ export interface DayPlannerSettings {
   dataviewSource: string;
   extendDurationUntilNext: boolean;
   defaultDurationMinutes: number;
+  minimalDurationMinutes: number;
   showTimestampInTaskBlock: boolean;
   showUncheduledTasks: boolean;
   showUnscheduledNestedTasks: boolean;
   showNow: boolean;
   showNext: boolean;
+  showTimeTracker: boolean;
   snapStepMinutes: number;
   pluginVersion: string;
   showCompletedTasks: boolean;
@@ -44,6 +56,11 @@ export interface DayPlannerSettings {
   icals: Array<IcalConfig>;
   colorOverrides: Array<ColorOverride>;
   releaseNotes: boolean;
+  taskStatusOnCreation: string;
+  eventFormatOnCreation: (typeof eventFormats)[number];
+  sortTasksInPlanAfterEdit: boolean;
+  firstDayOfWeek: (typeof firstDaysOfWeek)[number];
+  multiDayRange: "full-week" | "work-week" | "3-days";
 }
 
 export const defaultSettings: DayPlannerSettings = {
@@ -54,7 +71,7 @@ export const defaultSettings: DayPlannerSettings = {
   timelineIcon: "calendar-with-checkmark",
   endLabel: "All done",
   startHour: 6,
-  timelineDateFormat: DEFAULT_DAILY_NOTE_FORMAT,
+  timelineDateFormat: defaultDayFormat,
   centerNeedle: false,
   plannerHeading: "Day planner",
   plannerHeadingLevel: 1,
@@ -66,6 +83,7 @@ export const defaultSettings: DayPlannerSettings = {
   dataviewSource: "",
   extendDurationUntilNext: false,
   defaultDurationMinutes: 30,
+  minimalDurationMinutes: 10,
   showTimestampInTaskBlock: false,
   showUncheduledTasks: true,
   showUnscheduledNestedTasks: true,
@@ -77,6 +95,12 @@ export const defaultSettings: DayPlannerSettings = {
   icals: [],
   colorOverrides: [],
   releaseNotes: true,
+  taskStatusOnCreation: " ",
+  eventFormatOnCreation: "task",
+  sortTasksInPlanAfterEdit: false,
+  firstDayOfWeek: "monday",
+  multiDayRange: "3-days",
+  showTimeTracker: false,
 };
 
 export const defaultSettingsForTests = {

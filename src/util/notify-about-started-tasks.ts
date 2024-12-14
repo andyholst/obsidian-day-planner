@@ -1,9 +1,25 @@
-import { Task } from "../types";
+import type { DayPlannerSettings } from "../settings";
+import type { Task, WithTime } from "../task-types";
 
-export function notifyAboutStartedTasks(tasks: Task[]) {
+import { getMinutesSinceMidnight } from "./moment";
+import { createTimestamp, getOneLineSummary } from "./task-utils";
+
+export function notifyAboutStartedTasks(
+  tasks: WithTime<Task>[],
+  settings: DayPlannerSettings,
+) {
   if (tasks.length === 0) {
     return;
   }
 
-  new Notification(`Task started: ${tasks[0].firstLineText}`);
+  const firstTask = tasks[0];
+  const summary = getOneLineSummary(firstTask);
+  const timestamp = createTimestamp(
+    getMinutesSinceMidnight(firstTask.startTime),
+    firstTask.durationMinutes,
+    settings.timestampFormat,
+  );
+
+  new Notification(`Task started: ${summary}
+${timestamp}`);
 }

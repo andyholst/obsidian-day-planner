@@ -1,49 +1,74 @@
 import { last } from "lodash";
+import { isNotVoid } from "typed-assert";
 
-import type { PlacedTask } from "../../../../types";
+import type { LocalTask, WithTime } from "../../../../task-types";
+import {
+  getMinutesSinceMidnight,
+  minutesToMomentOfDay,
+} from "../../../../util/moment";
 import { getEndMinutes } from "../../../../util/task-utils";
 
 export function dragAndShiftOthers(
-  baseline: PlacedTask[],
-  editTarget: PlacedTask,
+  baseline: WithTime<LocalTask>[],
+  editTarget: WithTime<LocalTask>,
   cursorTime: number,
-): PlacedTask[] {
+): WithTime<LocalTask>[] {
   const index = baseline.findIndex((task) => task.id === editTarget.id);
+  const task = baseline[index];
+
+  isNotVoid(task);
+
   const preceding = baseline.slice(0, index);
   const following = baseline.slice(index + 1);
 
   const updated = {
-    ...editTarget,
-    startMinutes: cursorTime,
+    ...task,
+    isAllDayEvent: false,
+    startTime: minutesToMomentOfDay(cursorTime, task.startTime),
   };
 
-  const updatedFollowing = following.reduce((result, current) => {
-    const previous = last(result) || updated;
+  const updatedFollowing = following.reduce<WithTime<LocalTask>[]>(
+    (result, current) => {
+      const previous = last(result) || updated;
 
-    if (getEndMinutes(previous) > current.startMinutes) {
-      return [
-        ...result,
-        {
-          ...current,
-          startMinutes: getEndMinutes(previous),
-        },
-      ];
-    }
-
-    return [...result, current];
-  }, []);
-
-  const updatedPreceding = preceding
-    .reverse()
-    .reduce((result, current) => {
-      const nextInTimeline = last(result) || updated;
-
-      if (nextInTimeline.startMinutes < getEndMinutes(current)) {
+      if (
+        getEndMinutes(previous) > getMinutesSinceMidnight(current.startTime)
+      ) {
         return [
           ...result,
           {
             ...current,
-            startMinutes: nextInTimeline.startMinutes - current.durationMinutes,
+            startTime: minutesToMomentOfDay(
+              getEndMinutes(previous),
+              current.startTime,
+            ),
+          },
+        ];
+      }
+
+      return [...result, current];
+    },
+    [],
+  );
+
+  const updatedPreceding = preceding
+    .reverse()
+    .reduce<WithTime<LocalTask>[]>((result, current) => {
+      const nextInTimeline = last(result) || updated;
+
+      if (
+        getMinutesSinceMidnight(nextInTimeline.startTime) <
+        getEndMinutes(current)
+      ) {
+        return [
+          ...result,
+          {
+            ...current,
+            startTime: minutesToMomentOfDay(
+              getMinutesSinceMidnight(nextInTimeline.startTime) -
+                current.durationMinutes,
+              current.startTime,
+            ),
           },
         ];
       }

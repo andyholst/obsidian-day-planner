@@ -1,5 +1,5 @@
+@use "node_modules/overlayscrollbars/styles/overlayscrollbars";
 @use "../vendor/progress_pie_scss";
-@use "overlayscrollbars/styles/overlayscrollbars";
 
 @keyframes pulse {
   from {
@@ -8,6 +8,15 @@
 
   to {
     opacity: 0.2;
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
   }
 }
 
@@ -96,11 +105,11 @@
   background-color: transparent;
 }
 
-[data-type="timeline"] .view-content,
-[data-type="weekly"] .view-content,
-[data-type="timeTracker"] .view-content {
+[data-type="planner-timeline"] .view-content,
+[data-type="planner-weekly"] .view-content {
   --time-ruler-width: 30px;
   --scrollbar-width: 12px;
+  --timeline-flex-basis: 200px;
 
   --shadow-color: #00000010;
   --shadow-right: 2px 0px 2px var(--shadow-color);
@@ -109,6 +118,37 @@
   display: flex;
   flex-direction: column;
   padding: 0;
+}
+
+[data-type="planner-weekly"] {
+  .view-header {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .view-content {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-rows: auto 1fr;
+  }
+
+  .view-actions {
+    gap: var(--size-4-2);
+    justify-self: end;
+  }
+
+  .view-header-left {
+    display: none;
+  }
+
+  .view-header-title-container {
+    grid-column: 2;
+  }
+
+  .view-header-title {
+    font-size: var(--font-ui-medium);
+    color: var(--text-muted);
+  }
 }
 
 .os-scrollbar {
@@ -147,4 +187,33 @@
 .overlayscrollbars-svelte {
   width: 100%;
   height: 100%;
+}
+
+.day-planner-release-notes-container {
+  max-width: var(--file-line-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.undo-timeout-bar {
+  position: absolute;
+  bottom: 0px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background-color: var(--color-accent);
+}
+
+.planner-undo-notice {
+  position: relative;
+  overflow: hidden;
+}
+
+.planner-sticky-block-content {
+  position: sticky;
+  top: 0;
+
+  overflow: hidden;
+
+  max-height: 100%;
 }

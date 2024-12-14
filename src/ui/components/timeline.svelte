@@ -1,96 +1,128 @@
 <script lang="ts">
-  import { Moment } from "moment";
-  import { getContext } from "svelte";
-  import { Writable } from "svelte/store";
+  import type { Moment } from "moment";
+  import { isNotVoid } from "typed-assert";
 
-  import { dateRangeContextKey, obsidianContext } from "../../constants";
+  import { getObsidianContext } from "../../context/obsidian-context";
   import { isToday } from "../../global-store/current-time";
   import { getVisibleHours, snap } from "../../global-store/derived-settings";
-  import { settings } from "../../global-store/settings";
-  import { ObsidianContext } from "../../types";
-  import { getRenderKey } from "../../util/task-utils";
+  import { isRemote } from "../../task-types";
+  import { minutesToMomentOfDay } from "../../util/moment";
+  import { getRenderKey, offsetYToMinutes } from "../../util/task-utils";
   import { isTouchEvent } from "../../util/util";
-  import { styledCursor } from "../actions/styled-cursor";
 
   import Column from "./column.svelte";
   import LocalTimeBlock from "./local-time-block.svelte";
   import Needle from "./needle.svelte";
   import RemoteTimeBlock from "./remote-time-block.svelte";
-
-  // TODO: showRuler or add <slot name="left-gutter" />
-  export let day: Moment | undefined = undefined;
-  export let isUnderCursor = false;
+  import ScheduledTimeBlock from "./scheduled-time-block.svelte";
 
   const {
-    editContext: { confirmEdit, getEditHandlers },
-  } = getContext<ObsidianContext>(obsidianContext);
-  const dateRange = getContext<Writable<Moment[]>>(dateRangeContextKey);
+    day,
+    isUnderCursor = false,
+  }: { day: Moment; isUnderCursor?: boolean } = $props();
 
-  $: actualDay = day || $dateRange[0];
-  $: ({
-    displayedTasks,
-    cancelEdit,
-    handleContainerMouseDown,
-    handleResizerMouseDown,
-    handleTaskMouseUp,
-    handleGripMouseDown,
-    handleMouseEnter,
-    pointerOffsetY,
-    cursor,
-  } = getEditHandlers(actualDay));
+  const {
+    pointerDateTime,
+    settings,
+    editContext: {
+      confirmEdit,
+      handlers: {
+        handleContainerMouseDown,
+        handleResizerMouseDown,
+        handleTaskMouseUp,
+        handleGripMouseDown,
+      },
+      getDisplayedTasksForTimeline,
+    },
+    getDisplayedTasksWithClocksForTimeline,
+  } = getObsidianContext();
 
+  const displayedTasksForTimeline = $derived(getDisplayedTasksForTimeline(day));
+  const displayedTasksWithClocksForTimeline = $derived(
+    getDisplayedTasksWithClocksForTimeline(day),
+  );
   let el: HTMLElement | undefined;
 
   function updatePointerOffsetY(event: PointerEvent) {
+    isNotVoid(el);
+
+    // todo: add memo
     const viewportToElOffsetY = el.getBoundingClientRect().top;
     const borderTopToPointerOffsetY = event.clientY - viewportToElOffsetY;
+    const newOffsetY = snap(borderTopToPointerOffsetY, $settings);
+    const minutes = offsetYToMinutes(
+      newOffsetY,
+      $settings.zoomLevel,
+      $settings.startHour,
+    );
+    const dateTime = minutesToMomentOfDay(minutes, day);
 
-    pointerOffsetY.set(snap(borderTopToPointerOffsetY, $settings));
+    pointerDateTime.set({
+      dateTime,
+      type: "dateTime",
+    });
   }
 </script>
 
-<!--TODO: duplicate of <GlobalHandlers />-->
-<svelte:window on:blur={cancelEdit} />
-<svelte:body use:styledCursor={$cursor.bodyCursor} />
-<svelte:document on:pointerup={cancelEdit} />
-
 <Column visibleHours={getVisibleHours($settings)}>
-  {#if $isToday(actualDay)}
+  {#if $isToday(day)}
     <Needle autoScrollBlocked={isUnderCursor} />
   {/if}
 
   <div
     bind:this={el}
     class="tasks absolute-stretch-x"
-    on:mouseenter={handleMouseEnter}
-    on:pointerdown={(event) => {
+    onpointerdown={(event) => {
       if (isTouchEvent(event) || event.target !== el) {
         return;
       }
 
       handleContainerMouseDown();
     }}
-    on:pointermove={updatePointerOffsetY}
-    on:pointerup={confirmEdit}
-    on:pointerup|stopPropagation
+    onpointermove={updatePointerOffsetY}
+    onpointerup={confirmEdit}
   >
-    {#each $displayedTasks.withTime as task (getRenderKey(task))}
-      {#if task.calendar}
-        <RemoteTimeBlock {task} />
+    {#each $displayedTasksForTimeline.withTime as task (getRenderKey(task))}
+      {#if isRemote(task)}
+        <ScheduledTimeBlock {task}>
+          <RemoteTimeBlock {task} />
+        </ScheduledTimeBlock>
       {:else}
         <LocalTimeBlock
           onFloatingUiPointerDown={updatePointerOffsetY}
           onGripMouseDown={handleGripMouseDown}
-          onMouseUp={() => {
-              handleTaskMouseUp(task);
-          }}
           onResizerMouseDown={handleResizerMouseDown}
+          onpointerup={() => {
+            handleTaskMouseUp(task);
+          }}
           {task}
         />
       {/if}
     {/each}
   </div>
 </Column>
+
+{#if $settings.showTimeTracker}
+  <Column
+    --column-background-color="hsl(var(--color-accent-hsl), 0.03)"
+    visibleHours={getVisibleHours($settings)}
+  >
+    {#if $isToday(day)}
+      <Needle autoScrollBlocked={isUnderCursor} showBall={false} />
+    {/if}
+
+    <div class="tasks absolute-stretch-x">
+      {#each $displayedTasksWithClocksForTimeline as task (getRenderKey(task))}
+        <LocalTimeBlock
+          onpointerup={() => {
+            handleTaskMouseUp(task);
+          }}
+          {task}
+        />
+      {/each}
+    </div>
+  </Column>
+{/if}
 
 <style>
   .tasks {

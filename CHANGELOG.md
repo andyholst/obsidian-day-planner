@@ -1,35 +1,115 @@
-## 0.21.1.2: Removed the micro lags on laptop & lags on smartphone
+## 0.27.0
 
-### Enhancements
+### ✨ New features
 
-- **Performance Optimization:**
-  - Refactored core functions to significantly boost performance:
-    - **Efficient String Handling:** Reduced overhead by optimizing string concatenation and manipulation processes.
-    - **In-place Data Modifications:** Implemented in-place updates to minimize memory usage and avoid unnecessary data duplication.
-    - **Optimized Time Calculations:** Decreased reliance on Moment object cloning, reducing both memory and CPU usage.
+- Edit text in the command palette before task creation
+- Add descriptive icons to clock commands, so that they are easier to use in the mobile toolbar
 
-- **Memory Usage Reduction:**
-  - Streamlined various operations to reduce memory consumption:
-    - **Eliminated Redundant Operations:** Removed unnecessary intermediate arrays and objects, leading to lower memory footprint.
-    - **Efficient Task Grouping and Flattening:** Improved the logic for handling task-related data, making it more memory efficient.
+## 0.26.3
 
-- **Improved Task Processing Logic:**
-  - Enhanced the way tasks and events are processed:
-    - **Refined Multi-day Task Handling:** Made the processing of multi-day tasks more efficient, ensuring faster execution with less memory usage.
-    - **Optimized Event Synchronization:** Fine-tuned the synchronization process for better performance.
+### 🐞 Fixed issues
 
-- **Better Asynchronous Processing:**
-  - Optimized background task processing, resulting in reduced latency and smoother user experience.
+- Fix tasks not added to daily note when there is no planner heading inside it
+- Fix clocks from daily notes not showing up in timeline & active clocks
 
-- **Reduced the micro lags on laptop and lags on smartphone:**
-  - By increasing the re-query from 500ms to one minute to look for task changes
+## 0.26.2
 
-## 0.21.1.1
+### 🐞 Fixed issues
 
-### New features
+- Fix messing up frontmatter when there is no planner heading in file
 
-A Makefile and Docker-Compose file has been added to the project to easily build the day-planner plugin in a
-Linux context with the command "make run".
+## 0.26.0
+
+### ✨ New feature: time tracking (experimental)
+
+You can record time spent on tasks in the form of Dataview properties and then view the records as time blocks, much like planner entries. See [the docs for detailed instructions](https://github.com/ivan-lednev/obsidian-day-planner?tab=readme-ov-file#4-time-tracking).
+
+### 🐞 Fixed issues
+
+- Fixed crash for iOS on drag-and-drop edits (#519)
+- Fixed duplicated timestamps on drag-and-drop edits (#618)
+- Fixed removing task Dataview properties on edits (#370)
+
+## 0.25.0
+
+### 💥 Breaking changes
+
+- Now only the items under the planner heading will get pulled from daily notes (#382)
+
+### ✨ New features
+
+- Now after edits there is an **UNDO** notice that lets you revert the changes to tasks, even across multiple files (partially addresses #341)
+- Now the plugin will ask for permission before creating new files on drag-and-drop edits
+- Tasks crossing midnight now get shown properly in multiple day columns instead of stretching the first day (#586, #364)
+  - E.g.: `- 23:00 - 4:00 Task` will get shown in 2 columns as 2 separate blocks
+- Timeline controls look tidier now
+- Now all-day remote events are shown in the unscheduled tasks section
+- Text in blocks is now sticky and will stay visible when scrolling as well as when an event starts before the configured start hour
+
+#### Week planner -> multi-day planner
+
+- Now you can switch between 3 views:
+  - **full week** (with configurable start of the week)
+  - **work week** (starting on Monday)
+  - **3 upcoming days** (#515)
+- You can now configure the first day of the week (#231)
+- Now you can move back and forth between time periods from the sidebar of the multiday-view (#458, #495)
+- Now weekends get marked by a different background color
+- Now you an open plugin settings from the multi-day view
+- Now the time period of the open view is visible in its tab title
+- Now you can open the multi-day view from the left ribbon
+
+### 🐞 Fixed issues
+
+- Now the plugin finds contrasting font colors for your color overrides for time blocks (#481)
+- obsidian-tasks tasks now get copied under the original line in the original file
+- Now copying a task also copies the sub-items under it
+- Extra spaces no longer get added in edited files
+
+## 0.24.0
+
+### ✨ New features
+
+- Active task end time is now shown in status bar
+- Notifications now show timestamps
+
+### 🐞 Fixed issues
+
+- Now tasks with no text content are not shown in timeline
+- Fixed deleted recurrences of events in remote calendars showing up
+- Fixed 12 am parsed as noon
+
+## 0.23.0
+
+### ✨ New features
+
+- Now clicking on checkboxes on the timeline completes a task. [obsidian-tasks](https://github.com/obsidian-tasks-group/obsidian-tasks) logic is also respected: recurrent tasks get updated, 'finished' property gets added
+- There is now an option to sort items by time in your planner after an edit (thanks, @Gelio)
+- You can now configure what kind of task to create on edit: bullet (`- task`) or checkbox (`- [ ] task`)
+- Minimal task duration is now configurable. Now tasks won't shrink beyond this point when editing
+- Timestamps get parsed anywhere on the line, not only at the start, e.g.: `- [ ] #task 20:30 - 21:00 Wake up`
+  - Note that if a timestamp is not at the start of the line, it needs to be in a stricter format to avoid confusing the plugin
+    - `20:00` will work
+    - `2000` will not work
+- There is now an option to specify your email in remote calendar config. If you do this, your RSVP status (declined/tentative) will get displayed on remote tasks from this calendar (thanks, @ramandv)
+
+### 🐞 Fixed issues
+
+- Now timeline will stay where you've left it when you reload Obsidian (thanks, @k4a-l)
+
+## 0.22.0
+
+### ✨ New features
+
+- Default task status on creation is now configurable
+
+### 🐞 Fixed issues
+
+- Fixed load failure when unable to read daily notes
+- Fixed console error on plugin load
+- Fixed moving tasks to non-existent daily notes
+- Fixed active day in week not changing on next day
+- No more note switching when navigating between days from timeline view
 
 ## 0.21.1
 
@@ -64,12 +144,12 @@ Linux context with the command "make run".
 
 - ✨ Color coding: you can define background color for blocks containing certain text in first line
 - ✨ Weekly view now displays unscheduled tasks on top
-- ✨ Advanced drag-and-drop editing does not require modifier keys any more, you pick current edit mode in timeline controls 
+- ✨ Advanced drag-and-drop editing does not require modifier keys any more, you pick current edit mode in timeline controls
 
 ### Fixed issues
 
 - 🐞 Fixed scheduling tasks for other days than today (by @Lunkle)
-- 🐞 Pointer to current time is now more visible 
+- 🐞 Pointer to current time is now more visible
 - 🐞 Task summary in internet calendars is now displayed next to calendar name, to make it visible in short blocks
 
 ## 0.19.1 - 0.19.6

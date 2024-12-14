@@ -1,31 +1,52 @@
 <script lang="ts">
-  import { UnscheduledTask } from "../../types";
+  import { type Snippet } from "svelte";
+
+  import { getObsidianContext } from "../../context/obsidian-context";
+  import type { Task } from "../../task-types";
   import { tappable } from "../actions/tappable";
-  import { ActionArray, useActions } from "../actions/use-actions";
-  import { useColorOverride } from "../hooks/use-color-override";
+  import type { ActionArray } from "../actions/use-actions";
+  import { useActions } from "../actions/use-actions";
+  import { getColorOverride } from "../hooks/get-color-override";
+  import { useColor } from "../hooks/use-color.svelte";
 
-  export let task: UnscheduledTask;
-  export let use: ActionArray = [];
+  const {
+    children,
+    task,
+    use = [],
+  }: { children: Snippet; task: Task; use?: ActionArray } = $props();
 
-  $: override = useColorOverride(task);
-  // todo: hide in hook
-  $: backgroundColor =
-    $override || "var(--time-block-bg-color, var(--background-primary))";
+  const { isDarkMode, settingsSignal } = getObsidianContext();
+
+  const {
+    properContrastColors: { normal, muted, faint },
+    backgroundColor,
+    borderColor,
+  } = $derived(useColor({ task }));
 </script>
 
 <div class="padding">
   <div
-    style:background-color={backgroundColor}
+    style:--text-faint={faint}
+    style:--text-muted={muted}
+    style:--text-normal={normal}
+    style:--time-block-bg-color={backgroundColor}
+    style:--time-block-border-color={borderColor}
+    style:background-color={getColorOverride(
+      task,
+      isDarkMode.current,
+      settingsSignal.current,
+    )}
     class="content"
-    on:tap
+    class:truncated-bottom={task.truncated === "bottom"}
     on:longpress
-    on:pointerup
     on:pointerenter
     on:pointerleave
+    on:pointerup
+    on:tap
     use:tappable
     use:useActions={use}
   >
-    <slot />
+    {@render children()}
   </div>
 </div>
 
@@ -39,7 +60,7 @@
 
     width: var(--time-block-width, 100%);
     height: var(--time-block-height, auto);
-    padding: 0 1px 2px;
+    padding: var(--time-block-padding, 0 1px 2px);
 
     transition: 0.05s linear;
   }
@@ -47,8 +68,6 @@
   .content {
     position: relative;
 
-    overflow: hidden;
-    display: flex;
     flex: 1 0 0;
 
     font-size: var(--font-ui-small);
@@ -59,5 +78,11 @@
     border: 1px solid var(--time-block-border-color, var(--color-base-50));
     border-radius: var(--radius-s);
     box-shadow: 1px 1px 2px 0 #0000001f;
+  }
+
+  .truncated-bottom {
+    border-bottom-style: dashed;
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
   }
 </style>

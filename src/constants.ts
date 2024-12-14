@@ -1,34 +1,37 @@
-export const viewTypeTimeline = "timeline";
-export const viewTypeWeekly = "weekly";
-export const viewTypeTimeTracker = "timeTracker";
-export const obsidianContext = "obsidian";
-export const editContextKey = "editContext";
+export const viewTypeTimeline = "planner-timeline";
+export const viewTypeMultiDay = "planner-weekly";
+export const viewTypeReleaseNotes = "planner-release-notes";
+
+export const obsidianContextKey = "obsidianContext";
 export const dateRangeContextKey = "dateRangeContext";
 export const errorContextKey = "errorContext";
+
 export const defaultDayFormat = "YYYY-MM-DD";
-export const originalRecurrenceDayKeyFormat = "YYYY-MM-DD";
+export const icalDayKeyFormat = "YYYY-MM-DD";
+export const defaultRangeDayFormat = "MMM, D";
 export const defaultDayFormatForLuxon = "yyyy-MM-dd";
+
 export const clockSeparator = "--";
+export const clockKey = "clock";
+export const clockFormat = "YYYY-MM-DDTHH:mm:ss";
+
 export const defaultDurationMinutes = 30;
+
+export const searchResultLimit = 50;
 export const statusBarTextLimit = 15;
 export const indentBeforeTaskParagraph = 6;
-export const clockKey = "clocked";
-export const clockFormat = "YYYY-MM-DDTHH:mm:ss";
-export const reQueryAfterMillis = 60000;
+export const indentBeforeListParagraph = 2;
+
+export const reQueryAfterMillis = 200;
+export const undoTimeoutMillis = 8000;
+export const vibrationDurationMillis = 100;
+
 export const icalRefreshIntervalMillis = 5 * 60 * 1000;
+export const fallbackPartStat = "NEEDS-ACTION";
 
-export const noTitle = "(No title)";
+export const mdastUtilNumberOfSpacesInTab = 4;
 
-export const supportBanner = `🪲 [Report bugs and suggest features](https://github.com/ivan-lednev/obsidian-day-planner/issues)<br>
-❓ [Ask questions](https://github.com/ivan-lednev/obsidian-day-planner/discussions/new?category=q-a)<br>
-👍 [Give thumbs up to issues important to you](https://github.com/ivan-lednev/obsidian-day-planner/issues)<br>
-🪛 [Submit pull-requests](./CONTRIBUTING.md)<br>
-❤️ Support the project directly:
-
-<a href="https://www.buymeacoffee.com/machineelf" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
-
-You can disable these release notes in the settings tab.
-`;
+export const dataviewDownloadLink = "https://obsidian.md/plugins?id=dataview";
 
 export const icons = [
   "any-key",
@@ -37,6 +40,8 @@ export const icons = [
   "broken-link",
   "bullet-list",
   "calendar-with-checkmark",
+  "calendar-clock",
+  "calendar-range",
   "checkmark",
   "create-new",
   "cross",

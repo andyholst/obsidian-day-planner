@@ -1,106 +1,111 @@
 import type { Moment } from "moment";
-import type { CachedMetadata } from "obsidian";
 import { dedent } from "ts-dedent";
 
-import { timestampRegExp } from "../regexp";
-import type { TaskLocation } from "../types";
-import { getId } from "../util/id";
+import {
+  strictTimestampAnywhereInLineRegExp,
+  looseTimestampAtStartOfLineRegExp,
+} from "../regexp";
+import type { LocalTask } from "../task-types";
+import { getDiffInMinutes } from "../util/moment";
+import {
+  getFirstLine,
+  getLinesAfterFirst,
+  removeListTokens,
+} from "../util/task-utils";
 
-import { parseTimestamp } from "./timestamp/timestamp";
+import { parseTimestamp } from "./timestamp";
 
-export function getListItemsUnderHeading(
-  metadata: CachedMetadata,
-  heading: string,
-) {
-  const { headings, listItems } = metadata;
+function execTimestampPatterns(line: string) {
+  const trimmed = line.trim();
 
-  if (!headings || !listItems) {
-    return [];
-  }
-
-  let planHeading, nextHeadingOfSameLevel;
-  for (let i = 0; i < headings.length; i++) {
-    if (!planHeading && headings[i].heading === heading) {
-      planHeading = headings[i];
-    } else if (planHeading && headings[i].level <= planHeading.level) {
-      nextHeadingOfSameLevel = headings[i];
-      break;
-    }
-  }
-
-  if (!planHeading) {
-    return [];
-  }
-
-  const { start: planStart } = planHeading.position;
-  const nextStart = nextHeadingOfSameLevel?.position.start.line ?? Infinity;
-
-  return listItems.filter(({ position: { start: { line } } }) =>
-    line > planStart.line && line < nextStart
+  return (
+    looseTimestampAtStartOfLineRegExp.exec(trimmed) ||
+    strictTimestampAnywhereInLineRegExp.exec(trimmed)
   );
 }
 
-export function getHeadingByText(metadata: CachedMetadata, text: string) {
-  const { headings = [] } = metadata;
+export function testTimestampPatterns(line: string) {
+  const trimmed = line.trim();
 
-  for (let i = 0; i < headings.length; i++) {
-    if (headings[i].heading === text) {
-      return headings[i];
-    }
-  }
-
-  return null;
+  return (
+    looseTimestampAtStartOfLineRegExp.test(trimmed) ||
+    strictTimestampAnywhereInLineRegExp.test(trimmed)
+  );
 }
 
-export function createTask({
-  line,
-  completeContent,
-  location,
-  day,
-}: {
-  line: string;
-  completeContent: string;
-  location: TaskLocation;
-  day: Moment;
-}) {
-  const match = timestampRegExp.exec(line.trim());
+export function replaceOrPrependTimestamp(line: string, timestamp: string) {
+  if (looseTimestampAtStartOfLineRegExp.test(line)) {
+    return line.replace(looseTimestampAtStartOfLineRegExp, timestamp);
+  }
 
-  if (!match || !match.groups) {
+  if (strictTimestampAnywhereInLineRegExp.test(line)) {
+    return line.replace(strictTimestampAnywhereInLineRegExp, timestamp);
+  }
+
+  return `${timestamp} ${line}`;
+}
+
+export function getTimeFromLine({ line, day }: { line: string; day: Moment }) {
+  const match = execTimestampPatterns(line);
+
+  if (!match?.groups) {
     return null;
   }
 
-  const { listTokens, start, end, text } = match.groups;
+  const {
+    groups: { start, end },
+  } = match;
 
   const startTime = parseTimestamp(start, day);
-  const endTime = end ? parseTimestamp(end, day) : null;
+
+  let durationMinutes: number | undefined;
+
+  if (end) {
+    const endTime = parseTimestamp(end, day);
+
+    // todo: handle edge, use default duration
+    if (endTime.isAfter(startTime)) {
+      durationMinutes = getDiffInMinutes(endTime, startTime);
+    } else {
+      durationMinutes = getDiffInMinutes(
+        startTime,
+        endTime.clone().add(1, "day"),
+      );
+    }
+  }
 
   return {
-    listTokens,
     startTime,
-    endTime,
-    text: getDisplayedText(match, completeContent),
-    firstLineText: text.trim(),
-    location,
-    id: getId(),
+    durationMinutes,
   };
 }
 
-function getDisplayedText(
-  { groups: { text, listTokens, completion } }: RegExpExecArray,
-  completeContent: string,
-) {
-  const isTask = !!completion?.length;
-  const indexOfFirstNewline = completeContent.indexOf("\n");
-
-  if (indexOfFirstNewline < 0) {
-    return isTask ? `${listTokens}${text}` : text;
+export function getDisplayedText(task: LocalTask) {
+  if (task.status) {
+    return task.text;
   }
 
-  const linesAfterFirst = completeContent.slice(indexOfFirstNewline + 1);
+  return `${removeListTokens(getFirstLine(task.text))}
+${dedent(getLinesAfterFirst(task.text)).trimStart()}`;
+}
 
-  if (isTask) {
-    return `${listTokens}${text}\n${linesAfterFirst}`;
+export function compareTimestamps(a: string, b: string) {
+  const now = window.moment();
+
+  const aTime = getTimeFromLine({ line: a, day: now });
+  const bTime = getTimeFromLine({ line: b, day: now });
+
+  if (!aTime && !bTime) {
+    return 0;
   }
 
-  return `${text}\n${dedent(linesAfterFirst).trimStart()}`;
+  if (!aTime) {
+    return 1;
+  }
+
+  if (!bTime) {
+    return -1;
+  }
+
+  return aTime.startTime.diff(bTime.startTime);
 }

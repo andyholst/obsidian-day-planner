@@ -1,77 +1,117 @@
-import { Moment } from "moment/moment";
+import type { Moment } from "moment/moment";
 import { getDateFromPath } from "obsidian-daily-notes-interface";
-import { get, Readable, Writable } from "svelte/store";
+import type { Readable, Writable } from "svelte/store";
+import { get } from "svelte/store";
 
-import { ObsidianFacade } from "../../../service/obsidian-facade";
-import { PlacedTask, UnscheduledTask } from "../../../types";
-import { createTask } from "../../../util/task-utils";
+import { WorkspaceFacade } from "../../../service/workspace-facade";
+import type { DayPlannerSettings } from "../../../settings";
+import type { LocalTask, WithTime } from "../../../task-types";
+import { getMinutesSinceMidnight } from "../../../util/moment";
+import * as t from "../../../util/task-utils";
 
-import { EditMode, EditOperation } from "./types";
+import type { EditOperation } from "./types";
+import { EditMode } from "./types";
 
 export interface UseEditHandlersProps {
   startEdit: (operation: EditOperation) => void;
-  day: Moment;
-  obsidianFacade: ObsidianFacade;
-  cursorMinutes: Readable<number>;
-  editOperation: Writable<EditOperation>;
+  workspaceFacade: WorkspaceFacade;
+  editOperation: Writable<EditOperation | undefined>;
+  settings: Readable<DayPlannerSettings>;
+  pointerDateTime: Writable<{ dateTime?: Moment; type?: "dateTime" | "date" }>;
 }
 
 export function createEditHandlers({
-  day,
-  obsidianFacade,
+  workspaceFacade,
   startEdit,
-  cursorMinutes,
   editOperation,
+  settings,
+  pointerDateTime,
 }: UseEditHandlersProps) {
-
   function handleContainerMouseDown() {
-    const cursorTime = get(cursorMinutes);
-    const newTask = createTask(day, cursorTime);
+    const pointerDay = get(pointerDateTime).dateTime;
+
+    // todo: move out this check
+    if (!pointerDay) {
+      throw new Error("Day cannot be undefined on edit");
+    }
+
+    const pointerMinutes = getMinutesSinceMidnight(pointerDay);
+
+    // todo: use datetime
+    const newTask = t.create({
+      day: pointerDay,
+      startMinutes: pointerMinutes,
+      settings: get(settings),
+    });
 
     startEdit({
       task: { ...newTask, isGhost: true },
       mode: EditMode.CREATE,
-      day,
     });
   }
 
-  function handleResizerMouseDown(task: PlacedTask, mode: EditMode) {
-    startEdit({ task, mode, day });
+  function handleResizerMouseDown(task: WithTime<LocalTask>, mode: EditMode) {
+    const pointerDay = get(pointerDateTime).dateTime;
+
+    if (!pointerDay) {
+      throw new Error("Day cannot be undefined on edit");
+    }
+
+    startEdit({ task, mode });
   }
 
-  async function handleTaskMouseUp(task: UnscheduledTask) {
-    if (get(editOperation)) return;
+  async function handleTaskMouseUp(task: LocalTask) {
+    if (get(editOperation) || !task.location) {
+      return;
+    }
 
-    const { path, line } = task.location;
-    await obsidianFacade.revealLineInFile(path, line);
+    const { path, position } = task.location;
+    await workspaceFacade.revealLineInFile(path, position?.start?.line);
   }
 
-  function handleGripMouseDown(task: PlacedTask, mode: EditMode) {
-    startEdit({ task, mode, day });
+  // todo: fix (should probably use "day")
+  function handleUnscheduledTaskGripMouseDown(task: LocalTask) {
+    let pointerDay = get(pointerDateTime).dateTime;
+
+    if (!pointerDay) {
+      console.warn("Day should not be undefined on edit");
+      pointerDay = window.moment();
+    }
+
+    const withAddedTime = {
+      ...task,
+      // todo: add a proper fix
+      //  in what case does a task not have a location?
+      startTime: task.location
+        ? getDateFromPath(task.location.path, "day") || window.moment()
+        : window.moment(),
+    };
+
+    startEdit({ task: withAddedTime, mode: EditMode.DRAG });
   }
 
-  function handleUnscheduledTaskGripMouseDown(task: UnscheduledTask) {
-    const cursorTime = get(cursorMinutes);
-    const startTime = task.location
-      ? getDateFromPath(task.location.path, "day") || window.moment()
-      : window.moment();
+  function handleSearchResultGripMouseDown(task: LocalTask) {
+    const dateTime = get(pointerDateTime).dateTime;
 
-    const withAddedTime = { ...task, startMinutes: cursorTime, startTime };
+    if (!dateTime) {
+      throw new Error("Day cannot be undefined on edit");
+    }
 
-    startEdit({ task: withAddedTime, mode: EditMode.DRAG, day });
-  }
+    const withAddedTime = {
+      ...task,
+      startTime: dateTime,
+    };
 
-  function handleMouseEnter() {
-    editOperation.update((previous) => previous && { ...previous, day });
+    startEdit({ task: withAddedTime, mode: EditMode.SCHEDULE_SEARCH_RESULT });
   }
 
   return {
-    handleMouseEnter,
-    handleGripMouseDown,
+    handleGripMouseDown: handleResizerMouseDown,
     handleContainerMouseDown,
     handleResizerMouseDown,
     handleTaskMouseUp,
     handleUnscheduledTaskGripMouseDown,
+    handleSearchResultGripMouseDown,
   };
 }
 

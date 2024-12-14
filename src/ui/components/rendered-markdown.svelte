@@ -1,20 +1,22 @@
 <script lang="ts">
-  import { getContext } from "svelte";
-
-  import { obsidianContext } from "../../constants";
-  import { settings } from "../../global-store/settings";
-  import type { ObsidianContext, UnscheduledTask } from "../../types";
+  import { getObsidianContext } from "../../context/obsidian-context";
+  import type { LocalTask } from "../../task-types";
   import { renderTaskMarkdown } from "../actions/render-task-markdown";
 
-  export let task: UnscheduledTask;
+  export let task: LocalTask;
 
-  // todo: use context inside action
-  const { renderMarkdown } = getContext<ObsidianContext>(obsidianContext);
+  const { renderMarkdown, toggleCheckboxInFile, settings } =
+    getObsidianContext();
 </script>
 
 <div
-  class="rendered-markdown"
-  use:renderTaskMarkdown={{ task, settings: $settings, renderMarkdown }}
+  class="rendered-markdown planner-sticky-block-content"
+  use:renderTaskMarkdown={{
+    task,
+    settings: $settings,
+    renderMarkdown,
+    toggleCheckboxInFile,
+  }}
 ></div>
 
 <style>
@@ -36,13 +38,13 @@
     --checkbox-size: var(--font-ui-small);
 
     flex: 1 0 0;
+    padding: var(--size-2-1) var(--size-4-1);
     color: var(--text-normal);
   }
 
   .rendered-markdown :global(p),
   .rendered-markdown :global(ul) {
-    margin-block-start: 0;
-    margin-block-end: 0;
+    margin-block: 0;
   }
 
   .rendered-markdown :global(ul),

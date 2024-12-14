@@ -1,35 +1,29 @@
 <script lang="ts">
-  import { currentTime } from "../../global-store/current-time";
+  import type { Snippet } from "svelte";
+
   import { settings } from "../../global-store/settings";
-  import { Task } from "../../types";
-  import { ActionArray } from "../actions/use-actions";
+  import type { Task, WithPlacing, WithTime } from "../../task-types";
+  import type { ActionArray } from "../actions/use-actions";
   import { useTaskVisuals } from "../hooks/use-task-visuals";
 
   import TimeBlockBase from "./time-block-base.svelte";
 
-  export let task: Task;
-  export let use: ActionArray = [];
+  const {
+    children,
+    task,
+    use = [],
+  }: {
+    children: Snippet;
+    task: WithPlacing<WithTime<Task>>;
+    use?: ActionArray;
+  } = $props();
 
-  $: ({
-    height,
-    offset,
-    width,
-    left,
-    backgroundColor,
-    borderColor,
-    properContrastColors,
-  } = useTaskVisuals(task, {
-    settings,
-    currentTime,
-  }));
+  const { height, offset, width, left } = $derived(
+    useTaskVisuals(task, { settings }),
+  );
 </script>
 
 <TimeBlockBase
-  --text-faint={$properContrastColors.faint}
-  --text-muted={$properContrastColors.muted}
-  --text-normal={$properContrastColors.normal}
-  --time-block-bg-color={$backgroundColor}
-  --time-block-border-color={$borderColor}
   --time-block-height={$height}
   --time-block-left={left}
   --time-block-position="absolute"
@@ -43,5 +37,5 @@
   on:pointerenter
   on:pointerleave
 >
-  <slot />
+  {@render children()}
 </TimeBlockBase>

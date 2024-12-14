@@ -1,109 +1,134 @@
-import { Moment } from "moment/moment";
+import { isString, uniqBy } from "lodash/fp";
+import type { Moment } from "moment";
 import { getDateFromPath } from "obsidian-daily-notes-interface";
-import { DataArray, DateTime, STask } from "obsidian-dataview";
-import { defaultDayFormat, defaultDayFormatForLuxon, defaultDurationMinutes, indentBeforeTaskParagraph } from "../constants";
-import { createTask } from "../parser/parser";
-import { timeFromStartRegExp } from "../regexp";
-import { Task } from "../types";
-import { ClockMoments, toTime } from "./clock";
-import { getId } from "./id";
-import { getDiffInMinutes, getMinutesSinceMidnight } from "./moment";
-import { deleteProps } from "./properties";
+import { STask } from "obsidian-dataview";
+import { isNotVoid } from "typed-assert";
 
-export function unwrap<T>(group: ReturnType<DataArray<T>["groupBy"]>): [string, T[]][] {
-  return group.map(({ key, rows }) => [key, rows.array()]);
-}
+import {
+  clockKey,
+  defaultDayFormat,
+  defaultDayFormatForLuxon,
+  defaultDurationMinutes,
+  indentBeforeListParagraph,
+  indentBeforeTaskParagraph,
+} from "../constants";
+import { getTimeFromLine } from "../parser/parser";
+import type {
+  FileLine,
+  LocalTask,
+  TaskTokens,
+  TaskWithoutComputedDuration,
+} from "../task-types";
+
+import {
+  areValidClockMoments,
+  type ClockMoments,
+  toClockMoments,
+} from "./clock";
+import { getId } from "./id";
+import { liftToArray } from "./lift";
+import { splitMultiday } from "./moment";
+import { getFirstLine } from "./task-utils";
+import { indent, indentLines } from "./util";
 
 interface Node {
   text: string;
   symbol: string;
   children: Node[];
   status?: string;
-  scheduled?: DateTime;
 }
 
-export function textToString(node: Node): string {
-  const statusText = node.status ? `[${node.status}] ` : "";
-  return `${node.symbol} ${statusText}${deleteProps(node.text)}\n`;
+const baseIndentation = "\t";
+
+// todo: account for user settings
+export function createIndentation(level: number) {
+  return baseIndentation.repeat(level);
 }
 
-export function toString(node: Node, indentation = ""): string {
-  let result = `${indentation}${textToString(node)}`;
-  const childIndentation = `\t${indentation}`;
+export function getIndentationForListParagraph(sTask: Node) {
+  const isListItem = sTask.status === undefined;
 
-  for (let i = 0; i < node.children.length; i++) {
-    const child = node.children[i];
-    if (!child.scheduled && !timeFromStartRegExp.test(child.text)) {
-      result += toString(child, childIndentation);
-    }
+  return " ".repeat(
+    isListItem ? indentBeforeListParagraph : indentBeforeTaskParagraph,
+  );
+}
+
+export function textToMarkdown(sTask: Node) {
+  const indentationForListParagraph = getIndentationForListParagraph(sTask);
+
+  const [firstLine, ...otherLines] = sTask.text.split("\n");
+
+  const withIndentation = [
+    `${createMarkdownListTokens(sTask)} ${firstLine}`,
+    ...indentLines(otherLines, indentationForListParagraph),
+  ];
+
+  return withIndentation.join("\n");
+}
+
+const indentationPerLevel = "\t";
+
+// todo: use createIndentation
+export function toString(node: Node, parentIndentation = "") {
+  const nodeText = indent(textToMarkdown(node), parentIndentation);
+
+  return node.children.reduce((result, current) => {
+    const indentation = `${indentationPerLevel}${parentIndentation}`;
+
+    return `${result}
+${toString(current, indentation)}`;
+  }, nodeText);
+}
+
+export function getLines(node: STask, result: Array<FileLine> = []) {
+  result.push({ text: node.text, line: node.line, task: node.task });
+
+  for (const child of node.children) {
+    getLines(child, result);
   }
 
   return result;
 }
 
-export function toUnscheduledTask(sTask: STask, day: Moment) {
-  return {
-    durationMinutes: defaultDurationMinutes,
-    listTokens: getListTokens(sTask),
-    firstLineText: sTask.text,
-    text: toString(sTask),
-    location: {
-      path: sTask.path,
-      line: sTask.line,
-      position: sTask.position,
-    },
-    id: getId(),
-  };
-}
+export function toTaskWithClock(props: {
+  sTask: STask;
+  clockMoments: ClockMoments;
+}): LocalTask {
+  const { sTask, clockMoments } = props;
+  const [startTime, endTime] = clockMoments;
+  let durationMinutes = endTime.diff(startTime, "minutes");
 
-export function toTask(sTask: STask, day: Moment): Task {
-  const taskData = createTask({
-    line: textToString(sTask),
-    completeContent: toString(sTask),
-    day,
-    location: {
-      path: sTask.path,
-      line: sTask.line,
-      position: sTask.position,
-    },
-  });
-
-  const durationMinutes = taskData.endTime?.isAfter(taskData.startTime)
-    ? getDiffInMinutes(taskData.endTime, taskData.startTime)
-    : undefined;
-
-  return {
-    startTime: taskData.startTime,
-    listTokens: getListTokens(sTask),
-    firstLineText: taskData.firstLineText,
-    text: taskData.text,
-    durationMinutes,
-    startMinutes: getMinutesSinceMidnight(taskData.startTime),
-    location: {
-      path: sTask.path,
-      line: sTask.line,
-      position: sTask.position,
-    },
-    id: getId(),
-  };
-}
-
-export function getScheduledDay(sTask: STask): string | undefined {
-  if (sTask.scheduled?.toFormat) {
-    return sTask.scheduled.toFormat(defaultDayFormatForLuxon);
+  if (durationMinutes < 0) {
+    durationMinutes = defaultDurationMinutes;
   }
 
-  const dailyNoteDay = getDateFromPath(sTask.path, "day");
-  return dailyNoteDay ? dailyNoteDay.format(defaultDayFormat) : undefined;
+  return {
+    // todo: remove moment
+    ...toUnscheduledTask(sTask, window.moment()),
+    isAllDayEvent: false,
+    startTime,
+    durationMinutes,
+  };
 }
 
-export function toClockRecord(sTask: STask, clockMoments: ClockMoments) {
+export function toTaskWithActiveClock(sTask: STask, startTime: Moment) {
+  // todo: remove duplication
   return {
-    ...toTime(clockMoments),
-    startTime: clockMoments[0],
-    firstLineText: textToString(sTask),
+    ...toUnscheduledTask(sTask, startTime),
+    isAllDayEvent: false,
+    startTime,
+  };
+}
+
+export function toUnscheduledTask(sTask: STask, startTime: Moment) {
+  return {
+    isAllDayEvent: true,
+    startTime,
+    durationMinutes: defaultDurationMinutes,
+    symbol: sTask.symbol,
+    status: sTask.status,
     text: toString(sTask),
-    listTokens: "",
+    lines: getLines(sTask),
     location: {
       path: sTask.path,
       line: sTask.line,
@@ -113,22 +138,89 @@ export function toClockRecord(sTask: STask, clockMoments: ClockMoments) {
   };
 }
 
-export function toMarkdown(sTask: STask): string {
-  const baseIndent = "\t".repeat(sTask.position.start.col);
-  const extraIndent = " ".repeat(indentBeforeTaskParagraph);
+export function toTask(sTask: STask, day: Moment): TaskWithoutComputedDuration {
+  const parsedTime = getTimeFromLine({
+    line: getFirstLine(sTask.text),
+    day,
+  });
 
-  return sTask.text.split("\n").map((line, i) => {
-    return i === 0 ? `${baseIndent}${getListTokens(sTask)}${line}` : `${baseIndent}${extraIndent}${line}`;
-  }).join("\n");
+  isNotVoid(
+    parsedTime,
+    `Unexpectedly received an STask without a timestamp: ${sTask.text}`,
+  );
+
+  const { startTime, durationMinutes } = parsedTime;
+
+  return {
+    startTime,
+    symbol: sTask.symbol,
+    status: sTask.status,
+    text: toString(sTask),
+    lines: getLines(sTask),
+    durationMinutes,
+    location: {
+      path: sTask.path,
+      position: sTask.position,
+    },
+    id: getId(),
+  };
 }
 
-function getListTokens(sTask: STask): string {
-  const maybeCheckbox = sTask.status !== undefined ? `[${sTask.status}] ` : "";
-  return `${sTask.symbol} ${maybeCheckbox}`;
+export function getScheduledDay(sTask: STask) {
+  const scheduledPropDay: string = sTask.scheduled?.toFormat?.(
+    defaultDayFormatForLuxon,
+  );
+  const dailyNoteDay = getDateFromPath(sTask.path, "day")?.format(
+    defaultDayFormat,
+  );
+
+  return scheduledPropDay || dailyNoteDay;
 }
 
-export function replaceSTaskInFile(contents: string, sTask: STask, newText: string): string {
+export function textToMarkdownWithIndentation(sTask: STask) {
+  return indent(
+    textToMarkdown(sTask),
+    createIndentation(sTask.position.start.col),
+  );
+}
+
+function checkbox(status: string) {
+  return `[${status}]`;
+}
+
+export function createMarkdownListTokens(task: TaskTokens) {
+  if (task.status === undefined) {
+    return task.symbol;
+  }
+
+  return `${task.symbol} ${checkbox(task.status)}`;
+}
+
+export function replaceSTaskText(
+  contents: string,
+  sTask: STask,
+  newText: string,
+) {
   const lines = contents.split("\n");
-  lines.splice(sTask.position.start.line, sTask.position.end.line - sTask.position.start.line + 1, newText);
+  const deleteCount = sTask.position.end.line - sTask.position.start.line + 1;
+
+  lines.splice(sTask.position.start.line, deleteCount, newText);
+
   return lines.join("\n");
 }
+
+export function withClockMoments(sTask: STask) {
+  return liftToArray(sTask[clockKey])
+    .filter(isString)
+    .map(toClockMoments)
+    .filter(areValidClockMoments)
+    .flatMap(([start, end]) => splitMultiday(start, end))
+    .map((clockMoments) => ({
+      sTask,
+      clockMoments,
+    }));
+}
+
+export const uniq = uniqBy(
+  (task: STask) => `${task.path}::${task.position.start.line}`,
+);

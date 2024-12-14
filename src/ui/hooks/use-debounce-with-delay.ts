@@ -1,11 +1,11 @@
-import { Readable, readable } from "svelte/store";
+import { type Readable, readable } from "svelte/store";
 
 import { debounceWithDelay } from "../../util/debounce-with-delay";
 import { getUpdateTrigger } from "../../util/store";
 
 export function useDebounceWithDelay(
-  updater: Readable<object>,
-  delayer: Readable<object>,
+  updater: Readable<unknown>,
+  delayer: Readable<unknown>,
   timeout: number,
 ) {
   // We use readable instead of derived, because its callback function runs only once,

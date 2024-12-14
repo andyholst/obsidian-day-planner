@@ -1,96 +1,127 @@
 import { last } from "lodash";
+import type { Moment } from "moment";
+import { isNotVoid } from "typed-assert";
 
-import type { PlacedTask } from "../../../../types";
+import type { DayPlannerSettings } from "../../../../settings";
+import type { LocalTask, WithTime } from "../../../../task-types";
+import {
+  getMinutesSinceMidnight,
+  minutesToMomentOfDay,
+} from "../../../../util/moment";
 import { getEndMinutes } from "../../../../util/task-utils";
 
-// todo: use constant from settings
-const minimalDurationMinutes = 10;
+import { getDurationMinutes } from "./util";
 
 export function resizeAndShrinkOthers(
-  baseline: PlacedTask[],
-  editTarget: PlacedTask,
+  baseline: WithTime<LocalTask>[],
+  editTarget: WithTime<LocalTask>,
   cursorTime: number,
-): PlacedTask[] {
+  settings: DayPlannerSettings,
+  day?: Moment,
+): WithTime<LocalTask>[] {
   const index = baseline.findIndex((task) => task.id === editTarget.id);
+  const task = baseline[index];
+
+  isNotVoid(task);
+
   const preceding = baseline.slice(0, index);
   const following = baseline.slice(index + 1);
 
-  const durationMinutes = cursorTime - editTarget.startMinutes;
-
   const updated = {
-    ...editTarget,
-    durationMinutes,
+    ...task,
+    durationMinutes: getDurationMinutes(task, cursorTime, settings, day),
   };
 
-  const updatedFollowing = following.reduce((result, current) => {
-    const previous = last(result) || updated;
-    const currentNeedsToShrink = getEndMinutes(previous) > current.startMinutes;
-
-    if (currentNeedsToShrink) {
-      const newCurrentStartMinutes = getEndMinutes(previous);
-      const newCurrentDurationMinutes =
-        getEndMinutes(current) - newCurrentStartMinutes;
-
-      return [
-        ...result,
-        {
-          ...current,
-          startMinutes: newCurrentStartMinutes,
-          durationMinutes: Math.max(
-            newCurrentDurationMinutes,
-            minimalDurationMinutes,
-          ),
-        },
-      ];
-    }
-
-    return [...result, current];
-  }, []);
-
-  return [...preceding, updated, ...updatedFollowing];
-}
-
-export function resizeFromTopAndShrinkOthers(
-  baseline: PlacedTask[],
-  editTarget: PlacedTask,
-  cursorTime: number,
-): PlacedTask[] {
-  const index = baseline.findIndex((task) => task.id === editTarget.id);
-  const preceding = baseline.slice(0, index);
-  const following = baseline.slice(index + 1);
-
-  const durationMinutes =
-    editTarget.startMinutes + editTarget.durationMinutes - cursorTime;
-
-  const updated = {
-    ...editTarget,
-    startMinutes: cursorTime,
-    durationMinutes,
-  };
-
-  const updatedPreceding = preceding
-    .reverse()
-    .reduce((result, current) => {
-      const nextInTimeline = last(result) || updated;
+  const updatedFollowing = following.reduce<WithTime<LocalTask>[]>(
+    (result, current) => {
+      const previous = last(result) || updated;
       const currentNeedsToShrink =
-        nextInTimeline.startMinutes < getEndMinutes(current);
+        getEndMinutes(previous) > getMinutesSinceMidnight(current.startTime);
 
       if (currentNeedsToShrink) {
-        const currentNeedsToMove =
-          nextInTimeline.startMinutes - current.startMinutes <
-          minimalDurationMinutes;
-
-        const newCurrentStartMinutes = currentNeedsToMove
-          ? nextInTimeline.startMinutes - minimalDurationMinutes
-          : current.startMinutes;
+        const newCurrentStartMinutes = getEndMinutes(previous);
+        const newCurrentDurationMinutes =
+          getEndMinutes(current) - newCurrentStartMinutes;
 
         return [
           ...result,
           {
             ...current,
-            startMinutes: newCurrentStartMinutes,
+            startTime: minutesToMomentOfDay(
+              newCurrentStartMinutes,
+              current.startTime,
+            ),
+            durationMinutes: Math.max(
+              newCurrentDurationMinutes,
+              settings.minimalDurationMinutes,
+            ),
+          },
+        ];
+      }
+
+      return [...result, current];
+    },
+    [],
+  );
+
+  return [...preceding, updated, ...updatedFollowing];
+}
+
+export function resizeFromTopAndShrinkOthers(
+  baseline: WithTime<LocalTask>[],
+  editTarget: WithTime<LocalTask>,
+  cursorTime: number,
+  settings: DayPlannerSettings,
+): WithTime<LocalTask>[] {
+  const index = baseline.findIndex((task) => task.id === editTarget.id);
+  const task = baseline[index];
+
+  isNotVoid(task);
+
+  const preceding = baseline.slice(0, index);
+  const following = baseline.slice(index + 1);
+
+  const durationMinutes = Math.max(
+    getEndMinutes(task) - cursorTime,
+    settings.minimalDurationMinutes,
+  );
+
+  const updated = {
+    ...task,
+    startTime: minutesToMomentOfDay(cursorTime, task.startTime),
+    durationMinutes,
+  };
+
+  const updatedPreceding = preceding
+    .reverse()
+    .reduce<WithTime<LocalTask>[]>((result, current) => {
+      const nextInTimeline = last(result) || updated;
+      const currentNeedsToShrink =
+        getMinutesSinceMidnight(nextInTimeline.startTime) <
+        getEndMinutes(current);
+
+      if (currentNeedsToShrink) {
+        const currentNeedsToMove =
+          getMinutesSinceMidnight(nextInTimeline.startTime) -
+            getMinutesSinceMidnight(current.startTime) <
+          settings.minimalDurationMinutes;
+
+        const newCurrentStartMinutes = currentNeedsToMove
+          ? getMinutesSinceMidnight(nextInTimeline.startTime) -
+            settings.minimalDurationMinutes
+          : getMinutesSinceMidnight(current.startTime);
+
+        return [
+          ...result,
+          {
+            ...current,
+            startTime: minutesToMomentOfDay(
+              newCurrentStartMinutes,
+              current.startTime,
+            ),
             durationMinutes:
-              nextInTimeline.startMinutes - newCurrentStartMinutes,
+              getMinutesSinceMidnight(nextInTimeline.startTime) -
+              newCurrentStartMinutes,
           },
         ];
       }
