@@ -29,14 +29,22 @@ const cancelJob =
     clearTimeout(id);
   });
 
-export function createBackgroundBatchScheduler<T>(
-  onFinish: (results: T[]) => void,
-) {
-  const timeRemainingLowerLimit = 10;
+export type Scheduler<T> = ReturnType<typeof createBackgroundBatchScheduler<T>>;
+
+/**
+ * A scheduler accepts a list of tasks (a batch) and reports back when all of them are done.
+ * If a new batch of tasks is added, the scheduler will discard the previous batch and run the new one.
+ */
+export function createBackgroundBatchScheduler<T>(props: {
+  timeRemainingLowerLimit: number;
+}) {
+  const { timeRemainingLowerLimit } = props;
 
   let results: T[] = [];
   let tasks: Array<() => T> = [];
   let currentTaskHandle: number | null = null;
+  let currentOnFinish: (results: T[]) => void;
+  let currentOnCancel: (() => void) | undefined;
 
   function runTaskQueue(deadline: IdleDeadline) {
     while (
@@ -54,24 +62,24 @@ export function createBackgroundBatchScheduler<T>(
     if (tasks.length > 0) {
       currentTaskHandle = enqueueJob(runTaskQueue);
     } else {
-      performance.mark("batch-end");
-      // const { duration } = performance.measure(
-      //   "batch",
-      //   "batch-start",
-      //   "batch-end",
-      // );
-
-      onFinish(results);
+      currentOnFinish(results);
       currentTaskHandle = null;
     }
   }
 
-  function enqueueTasks(newTasks: Array<() => T>) {
-    performance.mark("batch-start");
+  function enqueueTasks(
+    newTasks: Array<() => T>,
+    onFinish: (results: T[]) => void,
+    onCancel?: () => void,
+  ) {
     if (currentTaskHandle) {
       cancelJob(currentTaskHandle);
+      currentOnCancel?.();
       currentTaskHandle = null;
     }
+
+    currentOnFinish = onFinish;
+    currentOnCancel = onCancel;
 
     tasks = newTasks;
     results = [];

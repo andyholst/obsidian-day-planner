@@ -2,15 +2,15 @@ import { isEmpty } from "lodash/fp";
 import type { Moment } from "moment";
 import ical from "node-ical";
 import { request } from "obsidian";
-import { derived, readable, type Readable } from "svelte/store";
+import { derived, type Readable } from "svelte/store";
 
 import type { DayPlannerSettings } from "../settings";
 import type { RemoteTask, WithTime } from "../task-types";
 import type { WithIcalConfig } from "../types";
+import { useIdleDerived } from "../ui/hooks/use-idle-derived";
 
 import { canHappenAfter, icalEventToTasks } from "./ical";
 import { getEarliestMoment } from "./moment";
-import { createBackgroundBatchScheduler } from "./scheduler";
 
 function isVEvent(event: ical.CalendarComponent): event is ical.VEvent {
   return event.type === "VEVENT";
@@ -90,17 +90,11 @@ export function useRemoteTasks(props: {
     },
   );
 
-  const tasksFromEvents = readable<Array<ReturnType<typeof icalEventToTasks>>>(
-    [],
-    (set) => {
-      const scheduler =
-        createBackgroundBatchScheduler<ReturnType<typeof icalEventToTasks>>(
-          set,
-        );
-
-      return schedulerQueue.subscribe(scheduler.enqueueTasks);
-    },
-  );
+  const tasksFromEvents = useIdleDerived({
+    batch: schedulerQueue,
+    timeRemainingLowerLimit: 10,
+    initial: [],
+  });
 
   return derived(tasksFromEvents, ($tasksFromEvents) =>
     $tasksFromEvents

@@ -61,16 +61,15 @@ export type PointerDateTime = Writable<{
   type?: "dateTime" | "date" | undefined;
 }>;
 
-function useTasks(props: {
+export function useTasks(props: {
   settingsStore: Writable<DayPlannerSettings>;
   combinedIcalSyncTrigger: Readable<object>;
   debouncedTaskUpdateTrigger: Readable<object>;
-  taskUpdateTrigger: Readable<object>;
-  keyDown: Readable<object>;
   isOnline: Readable<boolean>;
   visibleDays: Readable<Moment[]>;
   layoutReady: Readable<boolean>;
   dataviewFacade: DataviewFacade;
+  // todo: replace with metadata cache
   app: App;
   dataviewSource: Readable<string>;
   currentTime: Readable<Moment>;
@@ -89,8 +88,6 @@ function useTasks(props: {
     app,
     dataviewSource,
     currentTime,
-    taskUpdateTrigger,
-    keyDown,
     workspaceFacade,
     pointerDateTime,
     onUpdate,
@@ -138,7 +135,7 @@ function useTasks(props: {
           $currentTime,
           task.startTime.clone().startOf("minute"),
         ),
-        truncated: "bottom",
+        truncated: "bottom" as const,
       })),
   );
 
@@ -189,10 +186,8 @@ function useTasks(props: {
   );
 
   const search = useSearch({
-    dataviewFacade,
+    dataviewTasks: tasksFromExtraSources,
     dataviewSource,
-    taskUpdateTrigger,
-    keyDown,
   });
 
   const editContext = useEditContext({
@@ -210,6 +205,7 @@ function useTasks(props: {
     tasksForToday,
     currentTime,
   });
+
   return {
     tasksWithActiveClockProps,
     getDisplayedTasksWithClocksForTimeline,
@@ -306,8 +302,6 @@ export function createHooks({
     app,
     dataviewSource,
     currentTime,
-    taskUpdateTrigger,
-    keyDown,
     workspaceFacade,
     onUpdate,
     pointerDateTime,
