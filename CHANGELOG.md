@@ -2,7 +2,7 @@
 
 ### 🐞 Fixed issues
 
-- Increased the reQuery timer toremove micro and major lags from computer/smartphone device
+- Increased the reQuery timer to remove micro and major lags from computer/smartphone devices.
 
 ## 0.27.0
 
